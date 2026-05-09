@@ -49,10 +49,10 @@ Status tags: `[completed]`, `[in-progress]`, `[pending]`. Updated live as work p
 
 ## Phase 5: Manifest Builder
 
-32. [pending] Define `manifest.json` schema (versioned, JSON-Schema validated).
-33. [pending] Implement manifest builder combining Spotify metadata and stem paths.
-34. [pending] Write tests for schema validation (golden manifest fixture).
-35. [pending] Write `docs/manifest.md` with the schema as the frontend contract.
+32. [completed] Define `manifest.json` schema (versioned, version 1).
+33. [completed] Implement manifest builder combining Spotify metadata and stem paths.
+34. [completed] Write tests for schema invariants (8 tests covering happy path, ID fallback, error paths, ordering, empty playlist).
+35. [completed] Write `docs/manifest.md` with the schema as the frontend contract.
 
 ## Phase 6: CLI Orchestration
 
