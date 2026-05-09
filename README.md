@@ -64,13 +64,17 @@ stemguessr/
 ├── pyproject.toml
 ├── uv.lock
 ├── docs/
-│   └── index.md         ← documentation hub
+│   ├── index.md         ← documentation hub
+│   └── spotify.md       ← Phase 2: Spotify ingest
 ├── src/
 │   └── stemguessr/
-│       └── __init__.py  ← package root (CLI entry in Phase 6)
+│       ├── __init__.py  ← package root (CLI entry in Phase 6)
+│       └── spotify.py   ← Phase 2: Spotify Web API client
 ├── tests/
 │   ├── __init__.py
-│   └── reports/         ← test reports per CLAUDE.md
+│   ├── test_spotify.py
+│   └── reports/
+│       └── phase2_spotify.md
 └── web/                 ← frontend, populated in Phase 7
 ```
 

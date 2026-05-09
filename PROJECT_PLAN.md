@@ -21,12 +21,12 @@ Status tags: `[completed]`, `[in-progress]`, `[pending]`. Updated live as work p
 
 ## Phase 2: Spotify Ingest Module
 
-13. [pending] Add `spotipy` as a dependency.
-14. [pending] Implement Spotify Web API client (Client Credentials flow).
-15. [pending] Implement playlist URL parser (extract playlist ID from various URL forms: `open.spotify.com/playlist/...`, `spotify:playlist:...`, full URI with query string).
-16. [pending] Implement track listing extractor (titles, artists, ISRCs, durations, paginated for >100 tracks).
-17. [pending] Write unit tests for parser and extractor (mocked HTTP).
-18. [pending] Write `docs/spotify.md` covering API contract, auth model, rate limits, error handling.
+13. [completed] Add `spotipy` as a dependency.
+14. [completed] Implement Spotify Web API client (Client Credentials flow).
+15. [completed] Implement playlist URL parser (extract playlist ID from various URL forms: `open.spotify.com/playlist/...`, `spotify:playlist:...`, full URI with query string).
+16. [completed] Implement track listing extractor (titles, artists, ISRCs, durations, paginated for >100 tracks).
+17. [completed] Write unit tests for parser and extractor (mocked HTTP).
+18. [completed] Write `docs/spotify.md` covering API contract, auth model, rate limits, error handling.
 
 ## Phase 3: Preview Source Lookup & Download
 

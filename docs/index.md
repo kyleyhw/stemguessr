@@ -13,7 +13,7 @@ These are written as each phase lands. Placeholders are listed below for navigab
 
 | Phase | Document | Status |
 |-------|----------|--------|
-| 2 | `spotify.md` — Spotify Web API integration, playlist parsing, ISRC extraction | _to be written_ |
+| 2 | [`spotify.md`](spotify.md) — Spotify Web API integration, playlist parsing, ISRC extraction | written |
 | 3 | `sources.md` — preview lookup (iTunes / Deezer), caching, retry policy | _to be written_ |
 | 4 | `separation.md` — Demucs algorithm derivation, hybrid waveform/spectrogram U-Net, training objective | _to be written_ |
 | 5 | `manifest.md` — `manifest.json` schema as the frontend contract | _to be written_ |
