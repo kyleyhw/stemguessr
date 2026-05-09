@@ -6,6 +6,6 @@ re-exported here so the ``[project.scripts] stemguessr = "stemguessr:main"``
 console-script wiring resolves it.
 """
 
-from stemguessr.cli import main
+from stemguessr.cli import __version__, main
 
-__all__ = ["main"]
+__all__ = ["__version__", "main"]

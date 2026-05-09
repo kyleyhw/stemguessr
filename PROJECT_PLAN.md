@@ -75,8 +75,8 @@ Status tags: `[completed]`, `[in-progress]`, `[pending]`. Updated live as work p
 
 ## Phase 8: Integration & Polish
 
-49. [pending] End-to-end test: paste real Spotify playlist URL, run ingest, play game.
-50. [pending] Error states: no previews available, network failures, partial coverage.
-51. [pending] Cross-browser smoke test (Chromium primary; Firefox / Safari best-effort).
-52. [pending] README finalisation with screenshots and quickstart.
-53. [pending] Tag `v0.1.0` release.
+49. [deferred] End-to-end test against a real Spotify playlist (deferred — requires API credentials; documented procedure in `tests/reports/phase8_release.md`).
+50. [completed] Error states covered by unit tests across phases 2–6 (no preview / no ISRC / network failure / partial coverage / both-source miss).
+51. [deferred] Cross-browser smoke test (deferred — manual fixture-based smoke completed in Phase 7; Playwright deferred to v0.2.0).
+52. [completed] README finalisation: Quickstart section with concrete commands, full doc index, license reference, status banner.
+53. [completed] Add `--version` flag, `LICENSE` (MIT), `CHANGELOG.md`; tag `v0.1.0`.

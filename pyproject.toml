@@ -3,6 +3,7 @@ name = "stemguessr"
 version = "0.1.0"
 description = "A Bandle-style music-guessing game built around Demucs-separated stems from a Spotify public playlist URL."
 readme = "README.md"
+license = { file = "LICENSE" }
 authors = [
     { name = "Kyle", email = "kyleyhw@gmail.com" }
 ]

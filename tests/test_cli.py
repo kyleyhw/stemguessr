@@ -109,6 +109,14 @@ def stub_pipeline(monkeypatch: pytest.MonkeyPatch) -> StubState:
     return state
 
 
+class TestVersion:
+    def test_version_flag_prints_version_and_exits(self) -> None:
+        result = runner.invoke(app, ["--version"])
+        assert result.exit_code == 0
+        assert "stemguessr" in result.stdout
+        assert "0.1.0" in result.stdout
+
+
 class TestArgumentValidation:
     def test_invalid_stems_count_exits_1(self, tmp_path: Path) -> None:
         result = runner.invoke(

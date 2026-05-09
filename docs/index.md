@@ -4,8 +4,10 @@ This is the documentation hub for StemGuessr — a Bandle-style music-guessing g
 
 ## Top-level documents
 
-- [README](../README.md) — project overview, system architecture, repository layout, legal posture.
+- [README](../README.md) — project overview, system architecture, quickstart, legal posture.
 - [Project Plan](../PROJECT_PLAN.md) — phased development roadmap with live status tags.
+- [Changelog](../CHANGELOG.md) — release notes per version.
+- [License](../LICENSE) — MIT.
 
 ## Per-phase documentation
 

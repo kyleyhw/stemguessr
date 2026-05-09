@@ -4,7 +4,7 @@ A music-guessing game in the Bandle / Heardle family, built around source-separa
 
 ## Status
 
-In active development. See [`PROJECT_PLAN.md`](PROJECT_PLAN.md) for the phased roadmap. The repository currently completes **Phase 1: Repo Skeleton & Tooling** — no game logic yet.
+**v0.1.0 alpha released — 2026-05-10.** Full vertical slice from Spotify URL to playable game; 72 unit tests, all offline. See [`CHANGELOG.md`](CHANGELOG.md) for the release notes and [`PROJECT_PLAN.md`](PROJECT_PLAN.md) for the phased build log. End-to-end testing against a live Spotify playlist is the immediate next step (held off in this release because it needs API credentials).
 
 ## System architecture
 
@@ -59,6 +59,8 @@ stemguessr/
 ├── .pre-commit-config.yaml
 ├── .python-version
 ├── .secrets.baseline
+├── CHANGELOG.md
+├── LICENSE
 ├── PROJECT_PLAN.md
 ├── README.md            ← you are here
 ├── pyproject.toml
@@ -93,7 +95,8 @@ stemguessr/
 │       ├── phase4_separate.md
 │       ├── phase5_manifest.md
 │       ├── phase6_cli.md
-│       └── phase7_frontend.md
+│       ├── phase7_frontend.md
+│       └── phase8_release.md
 └── web/                 ← Phase 7 frontend
     ├── index.html
     ├── styles.css
@@ -104,24 +107,57 @@ stemguessr/
 
 ## Documentation
 
-- [`docs/index.md`](docs/index.md) — documentation hub, links to per-phase docs as they land.
+- [`docs/index.md`](docs/index.md) — documentation hub.
+- [`docs/spotify.md`](docs/spotify.md) — Spotify Web API integration, playlist parsing, ISRC extraction.
+- [`docs/sources.md`](docs/sources.md) — preview lookup (iTunes / Deezer), caching, retry policy.
+- [`docs/separation.md`](docs/separation.md) — Demucs algorithm derivation, hybrid waveform/spectrogram U-Net, training objective.
+- [`docs/manifest.md`](docs/manifest.md) — `manifest.json` schema as the frontend contract.
+- [`docs/cli.md`](docs/cli.md) — `stemguessr ingest <playlist_url>` reference.
+- [`docs/frontend.md`](docs/frontend.md) — game UI architecture, state machine, waveform rendering.
 - [`PROJECT_PLAN.md`](PROJECT_PLAN.md) — phased development plan with status tags.
+- [`CHANGELOG.md`](CHANGELOG.md) — release notes.
 
-## Development
+## Quickstart
 
-This project uses **uv** for package and environment management, **ruff** for linting and formatting, **ty** for type-checking, and **detect-secrets** for pre-commit secret scanning. All four are wired through `pre-commit`.
+End-to-end: clone, install, ingest a Spotify playlist, copy the static frontend assets next to the cache, and serve.
 
 ```bash
-# Clone and install (Python 3.12+ required; uv will fetch if missing)
+# 1. Clone and install (Python 3.12+ required; uv will fetch if missing)
 git clone https://github.com/kyleyhw/stemguessr.git
 cd stemguessr
 uv sync
 
-# Install pre-commit hooks
+# 2. Set Spotify Client Credentials. Register at developer.spotify.com/dashboard.
+export SPOTIFY_CLIENT_ID="..."
+export SPOTIFY_CLIENT_SECRET="..."
+
+# 3. Ingest a public playlist. The first run downloads ~250 MB of Demucs
+#    weights and runs CPU separation; later runs over the same playlist
+#    are essentially instant (cache hit).
+uv run stemguessr ingest "https://open.spotify.com/playlist/<id>" --out ./cache
+
+# 4. Copy frontend assets next to the manifest and serve.
+cp web/index.html web/styles.css web/game.js ./cache/
+cd ./cache
+python -m http.server 8000
+
+# 5. Open http://localhost:8000/ in a Chromium-based browser.
+```
+
+## Development
+
+The project uses **uv** for package and environment management, **ruff** for linting and formatting, **ty** for type-checking, and **detect-secrets** for pre-commit secret scanning. All four are wired through `pre-commit`.
+
+```bash
+# Install dev tooling and pre-commit hooks
+uv sync --all-groups
 uv run pre-commit install
 
 # Run hooks against all files
 uv run pre-commit run --all-files
+
+# Run the test suite (72 tests, fully offline)
+uv run pytest
 ```
 
 ## Legal posture
@@ -133,4 +169,4 @@ uv run pre-commit run --all-files
 
 ## License
 
-To be added before public release.
+[MIT](LICENSE).

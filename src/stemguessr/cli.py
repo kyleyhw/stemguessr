@@ -16,10 +16,17 @@ Public entry points:
 from __future__ import annotations
 
 import shutil
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 from pathlib import Path
 from typing import Annotated
 
 import typer
+
+try:
+    __version__ = _pkg_version("stemguessr")
+except PackageNotFoundError:  # editable install before metadata regeneration
+    __version__ = "0.0.0+unknown"
 
 from stemguessr.manifest import (
     TrackBuildEntry,
@@ -45,11 +52,28 @@ app = typer.Typer(
 )
 
 
+def _version_callback(value: bool) -> None:
+    """Print version and exit (used by ``--version`` flag)."""
+    if value:
+        typer.echo(f"stemguessr {__version__}")
+        raise typer.Exit()
+
+
 @app.callback()
-def _root() -> None:
-    """Empty callback — forces typer into subcommand mode even with a single
-    command, so the user-facing invocation is ``stemguessr ingest <url>``
-    rather than ``stemguessr <url>``.
+def _root(
+    version: Annotated[  # noqa: ARG001 (callback consumes the value via Typer)
+        bool,
+        typer.Option(
+            "--version",
+            callback=_version_callback,
+            is_eager=True,
+            help="Show version and exit.",
+        ),
+    ] = False,
+) -> None:
+    """Root callback — exposes ``--version`` and forces typer into subcommand
+    mode (single-command Typer apps otherwise auto-promote to root, breaking
+    the documented ``stemguessr ingest <url>`` invocation).
     """
 
 
