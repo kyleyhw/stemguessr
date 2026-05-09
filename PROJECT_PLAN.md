@@ -30,13 +30,13 @@ Status tags: `[completed]`, `[in-progress]`, `[pending]`. Updated live as work p
 
 ## Phase 3: Preview Source Lookup & Download
 
-19. [pending] Add `httpx` as a dependency.
-20. [pending] Implement iTunes Search API ISRC lookup (`/lookup?isrc=...&entity=song`).
-21. [pending] Implement Deezer API ISRC fallback (`/track/isrc:{ISRC}`).
-22. [pending] Implement disk cache (keyed by ISRC; deterministic file layout).
-23. [pending] Implement HTTP download with retries and exponential backoff.
-24. [pending] Write tests with mocked HTTP responses (success, miss, both-miss, network failure).
-25. [pending] Write `docs/sources.md` covering source priority, cache layout, failure modes.
+19. [completed] Add `httpx` as a dependency.
+20. [completed] Implement iTunes Search API ISRC lookup (`/lookup?isrc=...&entity=song`).
+21. [completed] Implement Deezer API ISRC fallback (`/track/isrc:{ISRC}`).
+22. [completed] Implement disk cache (keyed by ISRC; deterministic file layout).
+23. [completed] Implement HTTP download with retries and exponential backoff.
+24. [completed] Write tests with mocked HTTP responses (success, miss, both-miss, network failure).
+25. [completed] Write `docs/sources.md` covering source priority, cache layout, failure modes.
 
 ## Phase 4: Demucs Separation Wrapper
 
