@@ -69,7 +69,8 @@ stemguessr/
 │   ├── sources.md       ← Phase 3: preview sources
 │   ├── separation.md    ← Phase 4: Demucs derivation
 │   ├── manifest.md      ← Phase 5: manifest schema
-│   └── cli.md           ← Phase 6: CLI reference
+│   ├── cli.md           ← Phase 6: CLI reference
+│   └── frontend.md      ← Phase 7: frontend architecture
 ├── src/
 │   └── stemguessr/
 │       ├── __init__.py  ← package root (re-exports cli.main)
@@ -85,13 +86,20 @@ stemguessr/
 │   ├── test_separate.py
 │   ├── test_manifest.py
 │   ├── test_cli.py
+│   ├── test_fixture_manifest.py
 │   └── reports/
 │       ├── phase2_spotify.md
 │       ├── phase3_sources.md
 │       ├── phase4_separate.md
 │       ├── phase5_manifest.md
-│       └── phase6_cli.md
-└── web/                 ← frontend, populated in Phase 7
+│       ├── phase6_cli.md
+│       └── phase7_frontend.md
+└── web/                 ← Phase 7 frontend
+    ├── index.html
+    ├── styles.css
+    ├── game.js
+    └── fixtures/
+        └── manifest.json
 ```
 
 ## Documentation

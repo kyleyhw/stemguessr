@@ -1,0 +1,264 @@
+/*
+ * StemGuessr stylesheet — late-night radio studio aesthetic.
+ *
+ * Palette: warm cream, oxblood accent, dark-ink type. Typography pairs
+ * Fraunces (display serif, contrast-heavy) with JetBrains Mono (body).
+ */
+
+:root {
+    /* Background tones */
+    --cream:        #f3e9d2;
+    --cream-deep:   #e8dcbe;
+    --cream-shadow: #d8c8a3;
+
+    /* Foreground tones */
+    --ink:          #1f140b;
+    --ink-soft:     #5c4633;
+    --ink-faint:    #8b7355;
+
+    /* Accent */
+    --oxblood:        #6a1d24;
+    --oxblood-bright: #9a2a35;
+
+    /* Layout */
+    --content-max-width: 760px;
+    --radius:            6px;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--ink);
+    background: var(--cream);
+    min-height: 100vh;
+    padding: 2rem 1rem 4rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 2rem;
+    width: 100%;
+    max-width: var(--content-max-width);
+}
+
+h1 {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 800;
+    font-style: italic;
+    font-size: clamp(2.4rem, 5vw, 3.4rem);
+    color: var(--oxblood);
+    line-height: 1;
+    letter-spacing: -0.02em;
+}
+
+.status {
+    color: var(--ink-soft);
+    font-size: 0.85rem;
+    margin-top: 0.4rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+main {
+    width: 100%;
+    max-width: var(--content-max-width);
+    display: flex;
+    flex-direction: column;
+    gap: 1.6rem;
+}
+
+/* Player block */
+
+.player {
+    background: var(--cream-deep);
+    border: 1px solid var(--cream-shadow);
+    border-radius: var(--radius);
+    padding: 1.2rem;
+    box-shadow: inset 0 0 0 1px var(--cream);
+}
+
+#waveform {
+    width: 100%;
+    height: 160px;
+    background: var(--ink);
+    border-radius: 4px;
+    display: block;
+}
+
+.controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.round-label {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--ink-soft);
+    flex: 1;
+}
+
+/* Buttons */
+
+button {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    background: var(--oxblood);
+    color: var(--cream);
+    border: 1px solid var(--oxblood);
+    padding: 0.55rem 1.1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 0.9rem;
+    letter-spacing: 0.02em;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+button:hover:not(:disabled) {
+    background: var(--oxblood-bright);
+}
+
+button:disabled {
+    background: var(--ink-faint);
+    border-color: var(--ink-faint);
+    cursor: not-allowed;
+}
+
+#play-btn {
+    width: 3rem;
+    height: 3rem;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+/* Guess form */
+
+.guess form {
+    display: flex;
+    gap: 0.5rem;
+}
+
+input[type="text"] {
+    flex: 1;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 1rem;
+    padding: 0.55rem 0.8rem;
+    background: var(--cream);
+    border: 1px solid var(--cream-shadow);
+    border-radius: 4px;
+    color: var(--ink);
+    outline: none;
+}
+
+input[type="text"]:focus {
+    border-color: var(--oxblood);
+}
+
+#skip-btn {
+    background: transparent;
+    color: var(--ink-soft);
+    border-color: var(--cream-shadow);
+}
+
+#skip-btn:hover {
+    background: var(--cream-deep);
+    color: var(--ink);
+}
+
+.guess-list {
+    list-style: none;
+    margin-top: 1rem;
+    border-top: 1px solid var(--cream-shadow);
+}
+
+.guess-list li {
+    padding: 0.55rem 0.4rem;
+    border-bottom: 1px solid var(--cream-shadow);
+    font-size: 0.92rem;
+}
+
+.guess-list li.correct {
+    color: var(--oxblood);
+    font-weight: 700;
+}
+
+.guess-list li.skipped {
+    color: var(--ink-faint);
+    font-style: italic;
+}
+
+/* Reveal block */
+
+.reveal {
+    background: var(--oxblood);
+    color: var(--cream);
+    padding: 1.5rem;
+    border-radius: var(--radius);
+    text-align: center;
+}
+
+.reveal h2 {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 800;
+    font-style: italic;
+    font-size: 1.8rem;
+    margin-bottom: 0.4rem;
+    line-height: 1.1;
+}
+
+.reveal-artists {
+    font-size: 0.95rem;
+    opacity: 0.9;
+    margin-bottom: 0.8rem;
+}
+
+.reveal-outcome {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 1rem;
+    opacity: 0.7;
+}
+
+.reveal button {
+    background: var(--cream);
+    color: var(--oxblood);
+    border-color: var(--cream);
+}
+
+.reveal button:hover {
+    background: var(--cream-deep);
+}
+
+/* Footer */
+
+footer {
+    margin-top: 3rem;
+    font-size: 0.78rem;
+    color: var(--ink-faint);
+    letter-spacing: 0.04em;
+}
+
+footer a {
+    color: var(--oxblood);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--oxblood);
+}
+
+footer a:hover {
+    border-bottom-style: solid;
+}

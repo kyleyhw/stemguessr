@@ -18,7 +18,7 @@ These are written as each phase lands. Placeholders are listed below for navigab
 | 4 | [`separation.md`](separation.md) — Demucs algorithm derivation, hybrid waveform/spectrogram U-Net, training objective | written |
 | 5 | [`manifest.md`](manifest.md) — `manifest.json` schema as the frontend contract | written |
 | 6 | [`cli.md`](cli.md) — `stemguessr ingest <playlist_url>` reference | written |
-| 7 | `frontend.md` — game UI architecture, state machine, waveform rendering | _to be written_ |
+| 7 | [`frontend.md`](frontend.md) — game UI architecture, state machine, waveform rendering | written |
 
 ## Conventions
 

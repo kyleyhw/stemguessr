@@ -65,13 +65,13 @@ Status tags: `[completed]`, `[in-progress]`, `[pending]`. Updated live as work p
 
 ## Phase 7: Frontend Scaffold
 
-42. [pending] Create `web/index.html` (semantic markup, accessibility hooks).
-43. [pending] Create `web/styles.css` — Fraunces + JetBrains Mono, cream/oxblood palette, late-night radio studio aesthetic.
-44. [pending] Implement vanilla JS game state machine (4 rounds, stem reveal per round, guess input, win/lose).
-45. [pending] Implement waveform visualisation (Web Audio API → canvas).
-46. [pending] Implement manifest fetch and audio buffer preloading.
-47. [pending] Add mock manifest fixture for offline frontend development.
-48. [pending] Write `docs/frontend.md` describing the UI architecture and game state machine.
+42. [completed] Create `web/index.html` (semantic markup, ARIA hooks).
+43. [completed] Create `web/styles.css` — Fraunces + JetBrains Mono, cream/oxblood palette, late-night radio studio aesthetic.
+44. [completed] Implement vanilla JS game state machine (rounds reveal stems cumulatively, guess input, win/lose, reveal).
+45. [completed] Implement waveform visualisation (Web Audio API → canvas, per-pixel min/max plot with playback cursor).
+46. [completed] Implement manifest fetch and audio buffer preloading (per-track decode into AudioBuffer cache).
+47. [completed] Add mock manifest fixture for offline frontend development (`web/fixtures/manifest.json`).
+48. [completed] Write `docs/frontend.md` describing the UI architecture and game state machine.
 
 ## Phase 8: Integration & Polish
 

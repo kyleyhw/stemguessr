@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StemGuessr</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <h1>StemGuessr</h1>
+        <p class="status" id="status-line">Loading…</p>
+    </header>
+
+    <main>
+        <section class="player" aria-label="Audio player">
+            <canvas id="waveform" width="800" height="160" aria-hidden="true"></canvas>
+            <div class="controls">
+                <button id="play-btn" type="button" aria-label="Play / pause">▶</button>
+                <p class="round-label" id="round-label">—</p>
+            </div>
+        </section>
+
+        <section class="guess" aria-label="Guess input">
+            <form id="guess-form" autocomplete="off">
+                <input type="text" id="guess-input" placeholder="Type your guess…" autocomplete="off" spellcheck="false">
+                <button type="submit">Guess</button>
+                <button type="button" id="skip-btn">Skip</button>
+            </form>
+            <ol class="guess-list" id="guess-list" aria-live="polite"></ol>
+        </section>
+
+        <section class="reveal" id="reveal" hidden aria-live="polite">
+            <h2 id="reveal-title">—</h2>
+            <p class="reveal-artists" id="reveal-artists">—</p>
+            <p class="reveal-outcome" id="reveal-outcome">—</p>
+            <button id="next-track-btn" type="button">Next track →</button>
+        </section>
+    </main>
+
+    <footer>
+        <p><a href="https://github.com/kyleyhw/stemguessr">source</a> · stems via <a href="https://github.com/facebookresearch/demucs">Demucs</a></p>
+    </footer>
+
+    <script src="game.js" type="module"></script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+{
+    "version": 1,
+    "generated_at": "2026-05-10T00:00:00+00:00",
+    "source_playlist": {
+        "spotify_id": "FIXTURE_PLAYLIST_ID",
+        "url": "https://open.spotify.com/playlist/FIXTURE_PLAYLIST_ID"
+    },
+    "model": "htdemucs",
+    "stems": ["drums", "bass", "vocals", "other"],
+    "tracks": [
+        {
+            "id": "FIXTURE_TRACK_001",
+            "spotify_id": "FIXTURE_TRACK_001",
+            "isrc": "FIXTURE_TRACK_001",
+            "title": "Example Song A",
+            "artists": ["Example Artist"],
+            "duration_ms": 200000,
+            "stems": {
+                "drums":  "stems/FIXTURE_TRACK_001/drums.wav",
+                "bass":   "stems/FIXTURE_TRACK_001/bass.wav",
+                "vocals": "stems/FIXTURE_TRACK_001/vocals.wav",
+                "other":  "stems/FIXTURE_TRACK_001/other.wav"
+            }
+        },
+        {
+            "id": "FIXTURE_TRACK_002",
+            "spotify_id": "FIXTURE_TRACK_002",
+            "isrc": "FIXTURE_TRACK_002",
+            "title": "Example Song B",
+            "artists": ["Another Artist", "feat. Someone"],
+            "duration_ms": 245000,
+            "stems": {
+                "drums":  "stems/FIXTURE_TRACK_002/drums.wav",
+                "bass":   "stems/FIXTURE_TRACK_002/bass.wav",
+                "vocals": "stems/FIXTURE_TRACK_002/vocals.wav",
+                "other":  "stems/FIXTURE_TRACK_002/other.wav"
+            }
+        }
+    ]
+}
