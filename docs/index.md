@@ -15,7 +15,7 @@ These are written as each phase lands. Placeholders are listed below for navigab
 |-------|----------|--------|
 | 2 | [`spotify.md`](spotify.md) — Spotify Web API integration, playlist parsing, ISRC extraction | written |
 | 3 | [`sources.md`](sources.md) — preview lookup (iTunes / Deezer), caching, retry policy | written |
-| 4 | `separation.md` — Demucs algorithm derivation, hybrid waveform/spectrogram U-Net, training objective | _to be written_ |
+| 4 | [`separation.md`](separation.md) — Demucs algorithm derivation, hybrid waveform/spectrogram U-Net, training objective | written |
 | 5 | `manifest.md` — `manifest.json` schema as the frontend contract | _to be written_ |
 | 6 | `cli.md` — `stemguessr ingest <playlist_url>` reference | _to be written_ |
 | 7 | `frontend.md` — game UI architecture, state machine, waveform rendering | _to be written_ |

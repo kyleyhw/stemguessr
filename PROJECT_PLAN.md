@@ -40,12 +40,12 @@ Status tags: `[completed]`, `[in-progress]`, `[pending]`. Updated live as work p
 
 ## Phase 4: Demucs Separation Wrapper
 
-26. [pending] Add `demucs` as a dependency.
-27. [pending] Implement Demucs wrapper (`htdemucs` default; `htdemucs_6s` opt-in via flag).
-28. [pending] Make separation idempotent (skip if all stems already on disk).
-29. [pending] Cache stem outputs to disk, organised by track ID and stem name.
-30. [pending] Write tests with a small WAV fixture (synthetic mixture with known sources).
-31. [pending] Write `docs/separation.md` with full Demucs algorithm derivation: hybrid time-domain / spectrogram U-Net, complex-mask parameterisation, L1 + multi-resolution STFT loss training objective, and the choice of `htdemucs` over baseline Demucs.
+26. [completed] Add `demucs` as a dependency.
+27. [completed] Implement Demucs wrapper (`htdemucs` default; `htdemucs_6s` opt-in via flag).
+28. [completed] Make separation idempotent (skip if all stems already on disk).
+29. [completed] Cache stem outputs to disk, organised by track ID and stem name.
+30. [completed] Write tests with a mocked Demucs seam (real-Demucs end-to-end deferred to Phase 8 behind an env-var opt-in).
+31. [completed] Write `docs/separation.md` with full Demucs algorithm derivation: hybrid time-domain / spectrogram U-Net, complex-mask parameterisation, L1 + multi-resolution STFT loss training objective, and the choice of `htdemucs` over baseline Demucs.
 
 ## Phase 5: Manifest Builder
 
