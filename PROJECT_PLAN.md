@@ -56,12 +56,12 @@ Status tags: `[completed]`, `[in-progress]`, `[pending]`. Updated live as work p
 
 ## Phase 6: CLI Orchestration
 
-36. [pending] Add `typer` as a dependency.
-37. [pending] Implement `stemguessr ingest <playlist_url>` orchestrating Phases 2–5.
-38. [pending] Add progress reporting (tracks done / total, current operation).
-39. [pending] Add flags: `--out PATH`, `--stems {4,6}`, `--force-refresh`.
-40. [pending] Write tests with mocked sub-modules.
-41. [pending] Write `docs/cli.md` with full CLI reference.
+36. [completed] Add `typer` as a dependency.
+37. [completed] Implement `stemguessr ingest <playlist_url>` orchestrating Phases 2–5.
+38. [completed] Add progress reporting (tracks done / total, current operation).
+39. [completed] Add flags: `--out PATH`, `--stems {4,6}`, `--force-refresh`.
+40. [completed] Write tests with mocked sub-modules (7 tests via typer.testing.CliRunner).
+41. [completed] Write `docs/cli.md` with full CLI reference.
 
 ## Phase 7: Frontend Scaffold
 

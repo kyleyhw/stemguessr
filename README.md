@@ -68,25 +68,29 @@ stemguessr/
 │   ├── spotify.md       ← Phase 2: Spotify ingest
 │   ├── sources.md       ← Phase 3: preview sources
 │   ├── separation.md    ← Phase 4: Demucs derivation
-│   └── manifest.md      ← Phase 5: manifest schema
+│   ├── manifest.md      ← Phase 5: manifest schema
+│   └── cli.md           ← Phase 6: CLI reference
 ├── src/
 │   └── stemguessr/
-│       ├── __init__.py  ← package root (CLI entry in Phase 6)
+│       ├── __init__.py  ← package root (re-exports cli.main)
 │       ├── spotify.py   ← Phase 2: Spotify Web API client
 │       ├── sources.py   ← Phase 3: iTunes/Deezer preview lookup
 │       ├── separate.py  ← Phase 4: Demucs separation wrapper
-│       └── manifest.py  ← Phase 5: manifest.json builder
+│       ├── manifest.py  ← Phase 5: manifest.json builder
+│       └── cli.py       ← Phase 6: stemguessr ingest <url>
 ├── tests/
 │   ├── __init__.py
 │   ├── test_spotify.py
 │   ├── test_sources.py
 │   ├── test_separate.py
 │   ├── test_manifest.py
+│   ├── test_cli.py
 │   └── reports/
 │       ├── phase2_spotify.md
 │       ├── phase3_sources.md
 │       ├── phase4_separate.md
-│       └── phase5_manifest.md
+│       ├── phase5_manifest.md
+│       └── phase6_cli.md
 └── web/                 ← frontend, populated in Phase 7
 ```
 
