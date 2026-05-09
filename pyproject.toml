@@ -1,0 +1,25 @@
+[project]
+name = "stemguessr"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Kyle", email = "kyleyhw@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+stemguessr = "stemguessr:main"
+
+[build-system]
+requires = ["uv_build>=0.9.16,<0.10.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "detect-secrets>=1.5.0",
+    "pre-commit>=4.6.0",
+    "ruff>=0.15.12",
+    "ty>=0.0.34",
+]

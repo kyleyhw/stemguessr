@@ -1,0 +1,69 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+build/
+dist/
+sdist/
+wheels/
+MANIFEST
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+ENV/
+
+# --- Environment files (never commit secrets) ---
+.env
+.env.local
+.env.*.local
+
+# --- IDE / editors ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# --- OS metadata ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Testing / coverage ---
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+
+# --- Linters / type checkers ---
+.ruff_cache/
+.ty_cache/
+.mypy_cache/
+
+# --- Project: audio caches and stems ---
+# Never commit user audio. Test fixtures, if any, will be
+# explicitly allowlisted under tests/fixtures/ later.
+cache/
+stems/
+*.wav
+*.mp3
+*.flac
+*.m4a
+*.ogg
+*.aac
+
+# --- Project: Demucs model weights (downloaded on first run) ---
+models/
+.demucs/
+
+# --- Logs ---
+*.log
+logs/
