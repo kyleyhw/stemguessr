@@ -30,6 +30,12 @@ const state = {
     rafId: null,           // requestAnimationFrame id for waveform redraw loop
     knownTrackIds: new Set(),  // ids of tracks already in trackOrder
     pollTimer: null,       // setTimeout handle for the next manifest poll
+    // Pre-computed per-pixel min/max for the *currently active* stem mix —
+    // recomputed at every round advance (and on initial track load), then
+    // referenced by the draw routines on every animation frame. Caching it
+    // once per round avoids re-summing 4-6 stems × millions of samples on
+    // every redraw.
+    cachedWaveform: null,  // { min: Float32Array, max: Float32Array, peak: number }
 };
 
 // Manifest-polling cadence while ingest is still in progress (manifest.complete=false).
@@ -444,6 +450,7 @@ async function loadCurrentTrack() {
     els.playBtn.disabled = false;
     els.guessInput.focus();
     updateRoundLabel();
+    rebuildActiveWaveform();
     drawIdleWaveform();
 }
 
@@ -599,16 +606,13 @@ function drawIdleWaveform() {
     ctx.fillStyle = '#1f140b';
     ctx.fillRect(0, 0, w, h);
 
-    const urls = getActiveStemUrls();
-    if (urls.length === 0) return;
-    const buffer = state.buffersByUrl.get(urls[0]);
-    if (!buffer) return;
-    drawBufferOnCanvas(ctx, buffer, w, h);
+    drawCachedWaveform(ctx, w, h);
 
     // Show the playhead at pausedOffset whenever we're not currently playing.
     // (During playback, drawWaveformFrame draws a moving cursor instead.)
-    if (state.pausedOffset > 0) {
-        const cursorX = (state.pausedOffset / buffer.duration) * w;
+    const buf = currentBuffer();
+    if (buf && state.pausedOffset > 0) {
+        const cursorX = (state.pausedOffset / buf.duration) * w;
         ctx.fillStyle = '#9a2a35';
         ctx.fillRect(Math.max(0, cursorX - 1), 0, 2, h);
     }
@@ -622,14 +626,13 @@ function drawWaveformFrame() {
     // Background + waveform
     ctx.fillStyle = '#1f140b';
     ctx.fillRect(0, 0, w, h);
-    const urls = getActiveStemUrls();
-    const buffer = state.buffersByUrl.get(urls[0]);
-    if (buffer) drawBufferOnCanvas(ctx, buffer, w, h);
+    drawCachedWaveform(ctx, w, h);
 
     // Playback cursor
-    if (buffer) {
+    const buf = currentBuffer();
+    if (buf) {
         const elapsed = state.audioCtx.currentTime - state.playStartContextTime;
-        const cursorX = (elapsed / buffer.duration) * w;
+        const cursorX = (elapsed / buf.duration) * w;
         ctx.fillStyle = '#9a2a35';
         ctx.fillRect(Math.max(0, cursorX - 1), 0, 2, h);
     }
@@ -637,24 +640,65 @@ function drawWaveformFrame() {
     state.rafId = requestAnimationFrame(drawWaveformFrame);
 }
 
-function drawBufferOnCanvas(ctx, buffer, w, h) {
-    const data = buffer.getChannelData(0);
-    const samplesPerPixel = Math.max(1, Math.floor(data.length / w));
+function rebuildActiveWaveform() {
+    // Sum channel-0 of every currently-active stem and downsample to one
+    // (min, max) pair per canvas-buffer pixel. Stored on state.cachedWaveform
+    // and consumed by drawCachedWaveform at idle-redraw and per-frame.
+    const urls = getActiveStemUrls();
+    const channels = urls
+        .map((u) => state.buffersByUrl.get(u))
+        .filter(Boolean)
+        .map((b) => b.getChannelData(0));
+
+    if (channels.length === 0) {
+        state.cachedWaveform = null;
+        return;
+    }
+
+    const w = els.canvas.width;
+    const length = channels[0].length;
+    const samplesPerPixel = Math.max(1, Math.floor(length / w));
+
+    const min = new Float32Array(w);
+    const max = new Float32Array(w);
+    let peak = 0;
+
+    for (let x = 0; x < w; x++) {
+        const start = x * samplesPerPixel;
+        const end = Math.min(length, start + samplesPerPixel);
+        let pmin = Infinity;
+        let pmax = -Infinity;
+        for (let i = start; i < end; i++) {
+            let sum = 0;
+            for (let c = 0; c < channels.length; c++) sum += channels[c][i];
+            if (sum < pmin) pmin = sum;
+            if (sum > pmax) pmax = sum;
+        }
+        if (!Number.isFinite(pmin)) pmin = 0;
+        if (!Number.isFinite(pmax)) pmax = 0;
+        min[x] = pmin;
+        max[x] = pmax;
+        const a = Math.max(Math.abs(pmin), Math.abs(pmax));
+        if (a > peak) peak = a;
+    }
+
+    state.cachedWaveform = { min, max, peak };
+}
+
+function drawCachedWaveform(ctx, w, h) {
+    if (!state.cachedWaveform) return;
+    const { min, max, peak } = state.cachedWaveform;
+    // Normalise so the loudest sample reaches the top/bottom of the canvas;
+    // otherwise summing 4 stems can clip well outside [-1, 1] and the
+    // first-round (drums-only) waveform looks tiny by comparison.
+    const scale = peak > 0 ? 1 / peak : 1;
+    const midY = h / 2;
     ctx.strokeStyle = '#f3e9d2';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    const midY = h / 2;
     for (let x = 0; x < w; x++) {
-        let min = 1, max = -1;
-        const start = x * samplesPerPixel;
-        const end = Math.min(data.length, start + samplesPerPixel);
-        for (let i = start; i < end; i++) {
-            const v = data[i];
-            if (v < min) min = v;
-            if (v > max) max = v;
-        }
-        const yMin = midY - min * midY;
-        const yMax = midY - max * midY;
+        const yMin = midY - max[x] * scale * midY;
+        const yMax = midY - min[x] * scale * midY;
         ctx.moveTo(x, yMin);
         ctx.lineTo(x, yMax);
     }
@@ -725,6 +769,9 @@ function advance() {
     // Each round is a fresh listen — don't carry the previous round's
     // playhead position over to the new (cumulative) stem mix.
     state.pausedOffset = 0;
+    // The active stem set just changed; the cached summed waveform must
+    // grow to match what the next play() will actually output.
+    rebuildActiveWaveform();
     drawIdleWaveform();
 }
 
@@ -737,21 +784,22 @@ function revealAnswer({ won, atRound }) {
     state.round = state.manifest.stems.length - 1;
     state.pausedOffset = 0;
     updateRoundLabel();
+    // Waveform now reflects the full mix, matching what auto-play will
+    // produce.
+    rebuildActiveWaveform();
 
     const track = state.trackOrder[state.currentIndex];
 
-    // Album cover takes the place of the waveform — same fixed-height slot,
-    // no scroll required to see it. Waveform is hidden until the next track.
+    // Album cover sits above the title inside the reveal-info card. The
+    // waveform stays visible up top so the player can keep scrubbing the
+    // full mix while looking at the answer.
     if (track.cover_url) {
         els.playerCover.src = track.cover_url;
         els.playerCover.alt = `Album cover for ${track.title}`;
         els.playerCover.hidden = false;
-        els.waveformCanvas.hidden = true;
     } else {
-        // No cover — keep the waveform up so the slot isn't empty.
         els.playerCover.removeAttribute('src');
         els.playerCover.hidden = true;
-        els.waveformCanvas.hidden = false;
     }
 
     els.revealTitle.textContent = track.title;
@@ -770,11 +818,12 @@ function revealAnswer({ won, atRound }) {
 }
 
 function clearRevealView() {
-    // Restore waveform-driven view between tracks / on form re-show.
+    // Tear down the reveal block between tracks / on form re-show. The
+    // waveform is unaffected — it stays the player's primary visual at
+    // all times now.
     els.revealInfo.hidden = true;
     els.playerCover.hidden = true;
     els.playerCover.removeAttribute('src');
-    els.waveformCanvas.hidden = false;
 }
 
 function nextTrack() {

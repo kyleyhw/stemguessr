@@ -31,8 +31,8 @@
                 <div class="ingest-options">
                     <label for="stems-select">Stems</label>
                     <select id="stems-select">
-                        <option value="4" selected>4 (drums, bass, vocals, other)</option>
-                        <option value="6">6 (+ guitar, piano)</option>
+                        <option value="4" selected>4 (drums, bass, other, vocals)</option>
+                        <option value="6">6 (+ piano, guitar)</option>
                     </select>
                     <label for="limit-input">Limit</label>
                     <input type="number" id="limit-input" min="1" placeholder="all">
@@ -49,7 +49,6 @@
         <section class="player" id="player-section" aria-label="Audio player">
             <div class="player-visual">
                 <canvas id="waveform" width="800" height="200" aria-hidden="true"></canvas>
-                <img id="player-cover" alt="" hidden>
             </div>
             <div class="controls">
                 <button id="play-btn" type="button" aria-label="Play / pause">▶</button>
@@ -60,6 +59,7 @@
                 </label>
             </div>
             <div class="reveal-info" id="reveal-info" hidden aria-live="polite">
+                <img id="player-cover" alt="" hidden>
                 <h2 id="reveal-title">—</h2>
                 <p class="reveal-artists" id="reveal-artists">—</p>
                 <p class="reveal-outcome" id="reveal-outcome">—</p>

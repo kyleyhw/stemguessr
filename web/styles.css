@@ -31,6 +31,14 @@
     padding: 0;
 }
 
+/* The HTML `hidden` attribute is the source of truth for show/hide state.
+   Without !important, our element-level `display: block` rules below (on
+   #waveform, #player-cover, and similar) win the cascade and the element
+   keeps rendering even when its `hidden` property is true. */
+[hidden] {
+    display: none !important;
+}
+
 body {
     font-family: 'JetBrains Mono', ui-monospace, monospace;
     font-size: 15px;
@@ -162,17 +170,6 @@ main {
     box-shadow: inset 0 0 0 1px var(--cream);
 }
 
-.player-visual {
-    /* Fixed height so the canvas-vs-cover swap doesn't make the page jump. */
-    height: 200px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--ink);
-    border-radius: 4px;
-    overflow: hidden;
-}
-
 #waveform {
     width: 100%;
     height: 200px;
@@ -188,11 +185,12 @@ main {
 
 #player-cover {
     display: block;
-    width: 200px;
-    height: 200px;
+    width: 180px;
+    height: 180px;
+    margin: 0 auto 0.8rem;
     object-fit: cover;
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
     border-radius: 4px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
 }
 
 .reveal-info {
