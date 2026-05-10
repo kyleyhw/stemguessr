@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>StemGuessr</title>
+    <!-- Force the browser to revalidate styles.css and game.js on each load.
+         The frontend is iterated in place during development; without this,
+         users would silently keep running an old cached game.js after the
+         repo updates. -->
+    <meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">

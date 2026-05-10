@@ -205,7 +205,6 @@ async function loadCurrentTrack() {
 
     const track = state.trackOrder[state.currentIndex];
     if (!track) {
-        // No (more) tracks available right now.
         els.playBtn.disabled = true;
         els.guessInput.disabled = true;
         els.skipBtn.disabled = true;
