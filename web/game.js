@@ -73,48 +73,66 @@ const els = {
 
 async function init() {
     wireEvents();
-    els.status.textContent = 'Checking for an existing playlist…';
 
-    // Try to fetch the manifest. If it doesn't exist (404), or it exists but
-    // is finalised with zero tracks, show the ingest form so the user can
-    // paste a playlist URL.
-    const fetched = await fetchAndUpdateManifest({ silent: true });
+    // Probe for an existing manifest. We use it only to pre-fill the form
+    // and surface a "you have N tracks cached" hint — we do NOT populate
+    // trackOrder or load any audio yet. That happens once the user has
+    // committed to a playlist via the form (either resuming the cached one
+    // or pasting a fresh URL).
+    state.manifest = await peekManifest();
+    showIngestPrompt();
+}
 
-    if (!fetched) {
-        // 404 or unreadable — show the form for a fresh start.
-        showIngestPrompt('Paste a public Spotify playlist URL to begin.');
-        return;
-    }
-
-    if (state.trackOrder.length === 0 && state.manifest.complete) {
-        showIngestPrompt('No tracks in the current cache. Paste a URL to start a new ingest.');
-        return;
-    }
-
-    // Manifest is usable; continue with the normal game flow.
-    hideIngestPrompt();
-    // fetchAndUpdateManifest has already triggered loadCurrentTrack if there
-    // was a track to load. If trackOrder is still empty and ingest is in
-    // progress, paint the explicit "waiting for first track" state.
-    if (state.trackOrder.length === 0 && !state.manifest.complete) {
-        els.status.textContent = 'Waiting for first track to be separated…';
-        els.playBtn.disabled = true;
-        els.guessInput.disabled = true;
-        els.skipBtn.disabled = true;
-    }
-
-    if (!state.manifest.complete) {
-        scheduleManifestPoll();
+async function peekManifest() {
+    try {
+        const response = await fetch('manifest.json', { cache: 'no-cache' });
+        if (!response.ok) return null;
+        const m = await response.json();
+        return m && m.version === 1 ? m : null;
+    } catch {
+        return null;
     }
 }
 
-function showIngestPrompt(message) {
+function showIngestPrompt() {
     els.ingestPrompt.hidden = false;
     els.playerSection.hidden = true;
     els.guessSection.hidden = true;
     els.reveal.hidden = true;
-    els.status.textContent = message;
+
+    if (state.manifest && state.manifest.tracks.length > 0) {
+        // Pre-fill with the cached playlist's URL so the user can press
+        // submit to resume in one click.
+        els.playlistInput.value = state.manifest.source_playlist.url;
+        const n = state.manifest.tracks.length;
+        const expected = state.manifest.expected_tracks ?? n;
+        const cacheState = state.manifest.complete
+            ? 'cached locally'
+            : `ingest in progress (${n}/${expected})`;
+        els.status.textContent =
+            `${n} track${n === 1 ? '' : 's'} ${cacheState}. ` +
+            'Submit the same URL to resume, or paste a different one.';
+    } else {
+        els.playlistInput.value = '';
+        els.status.textContent = 'Paste a public Spotify playlist URL to begin.';
+    }
     els.playlistInput.focus();
+}
+
+// 22-char base-62. Mirrors stemguessr.spotify._PLAYLIST_ID_PATTERN.
+const PLAYLIST_ID_RE = /[A-Za-z0-9]{22}/;
+
+function extractPlaylistId(urlOrUri) {
+    const s = (urlOrUri || '').trim();
+    // Bare ID
+    if (/^[A-Za-z0-9]{22}$/.test(s)) return s;
+    // spotify:playlist:<id>
+    let m = s.match(/^spotify:playlist:([A-Za-z0-9]{22})$/);
+    if (m) return m[1];
+    // URL form: .../playlist/<id>(?...)
+    m = s.match(/playlist\/([A-Za-z0-9]{22})/);
+    if (m) return m[1];
+    return null;
 }
 
 function hideIngestPrompt() {
@@ -128,6 +146,39 @@ async function submitIngestForm(event) {
     const playlistUrl = els.playlistInput.value.trim();
     if (!playlistUrl) return;
 
+    // Cache short-circuit: if the submitted URL resolves to the same
+    // playlist ID as the manifest currently on disk, do not round-trip
+    // to the server at all — just promote the cached manifest into the
+    // playable state. This makes refresh-and-resume a one-click,
+    // zero-network-cost operation.
+    const submittedId = extractPlaylistId(playlistUrl);
+    const cachedId = state.manifest && state.manifest.source_playlist
+        ? state.manifest.source_playlist.spotify_id
+        : null;
+    if (
+        submittedId
+        && cachedId
+        && submittedId === cachedId
+        && state.manifest.tracks.length > 0
+    ) {
+        // Populate playable state from the cached manifest and start playing.
+        const shuffled = shuffle([...state.manifest.tracks]);
+        state.trackOrder = shuffled;
+        state.knownTrackIds = new Set(shuffled.map((t) => t.id));
+        state.currentIndex = 0;
+
+        hideIngestPrompt();
+        await loadCurrentTrack();
+        // If the cached manifest reports the previous run was still
+        // mid-ingest, resume polling so any tracks the server is still
+        // working on stream in.
+        if (!state.manifest.complete) {
+            scheduleManifestPoll();
+        }
+        return;
+    }
+
+    // Different playlist (or no cache) — start a real ingest run.
     const nStems = parseInt(els.stemsSelect.value, 10);
     const limitRaw = els.limitInput.value.trim();
     const limit = limitRaw === '' ? null : parseInt(limitRaw, 10);
