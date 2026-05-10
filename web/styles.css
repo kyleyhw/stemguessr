@@ -168,6 +168,11 @@ main {
     background: var(--ink);
     border-radius: 4px;
     display: block;
+    cursor: pointer;
+    /* Disable touch panning on mobile so a horizontal drag scrubs cleanly
+       instead of scrolling the page. */
+    touch-action: none;
+    user-select: none;
 }
 
 .controls {

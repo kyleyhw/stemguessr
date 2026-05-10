@@ -25,7 +25,8 @@ const state = {
     volume: 0.1,           // 0..0.25 — initial volume kept low; full mix is hot
     buffersByUrl: new Map(),  // url -> AudioBuffer
     activeSources: [],     // currently-playing AudioBufferSourceNodes
-    playStartContextTime: 0,  // audioCtx.currentTime at play() call
+    playStartContextTime: 0,  // audioCtx.currentTime - pausedOffset (so elapsed = real position)
+    pausedOffset: 0,       // seconds into the clip; the position play() will start from
     rafId: null,           // requestAnimationFrame id for waveform redraw loop
     knownTrackIds: new Set(),  // ids of tracks already in trackOrder
     pollTimer: null,       // setTimeout handle for the next manifest poll
@@ -339,6 +340,55 @@ function wireEvents() {
             if (state.masterGain) state.masterGain.gain.value = v;
         }
     });
+
+    attachWaveformScrub();
+}
+
+// ============================================================
+// Waveform scrubbing — click and drag the canvas to seek
+// ============================================================
+//
+// Pause-while-scrubbing pattern: pointerdown stops the active sources and
+// remembers whether we were playing; pointermove updates pausedOffset and
+// the visual cursor without re-creating sources (so we don't churn audio
+// nodes at 60 Hz); pointerup resumes from the new offset if we were playing
+// before the drag started. A single click in playing state therefore
+// seeks-and-continues; in paused state it just moves the cursor.
+
+function attachWaveformScrub() {
+    const canvas = els.canvas;
+    let scrubbing = false;
+    let resumeAfter = false;
+
+    function fractionFromEvent(e) {
+        const rect = canvas.getBoundingClientRect();
+        return (e.clientX - rect.left) / rect.width;
+    }
+
+    canvas.addEventListener('pointerdown', (e) => {
+        if (!currentBuffer()) return;  // no audio yet — nothing to seek
+        scrubbing = true;
+        resumeAfter = state.isPlaying;
+        if (state.isPlaying) stop();
+        try { canvas.setPointerCapture(e.pointerId); } catch { /* unsupported */ }
+        seekToFraction(fractionFromEvent(e));
+        e.preventDefault();
+    });
+
+    canvas.addEventListener('pointermove', (e) => {
+        if (!scrubbing) return;
+        seekToFraction(fractionFromEvent(e));
+    });
+
+    function endScrub(e) {
+        if (!scrubbing) return;
+        scrubbing = false;
+        try { canvas.releasePointerCapture(e.pointerId); } catch { /* unsupported */ }
+        if (resumeAfter) play();
+    }
+
+    canvas.addEventListener('pointerup', endScrub);
+    canvas.addEventListener('pointercancel', endScrub);
 }
 
 // ============================================================
@@ -348,6 +398,7 @@ function wireEvents() {
 async function loadCurrentTrack() {
     state.round = 0;
     state.guesses = [];
+    state.pausedOffset = 0;
     els.guessList.innerHTML = '';
     els.reveal.hidden = true;
     els.guessInput.value = '';
@@ -435,33 +486,47 @@ function togglePlay() {
 }
 
 function play() {
-    // Some browsers suspend the AudioContext until a user gesture; resume it.
     if (state.audioCtx.state === 'suspended') {
         state.audioCtx.resume();
     }
 
     const urls = getActiveStemUrls();
+    if (urls.length === 0) return;
+    const offset = clampOffset(state.pausedOffset);
+
     state.activeSources = urls.map((url) => {
         const src = state.audioCtx.createBufferSource();
         src.buffer = state.buffersByUrl.get(url);
         src.connect(state.masterGain);
-        src.start();
+        // start(when=0 → immediately, offset=offset)
+        src.start(0, offset);
         return src;
     });
 
     state.isPlaying = true;
-    state.playStartContextTime = state.audioCtx.currentTime;
+    // Anchoring playStartContextTime this way means
+    //   elapsed = audioCtx.currentTime - playStartContextTime
+    // gives the *current* playhead position (not "time since play() was called"),
+    // which is what every cursor and seek calculation needs.
+    state.playStartContextTime = state.audioCtx.currentTime - offset;
     els.playBtn.textContent = '■';
 
-    // All stems are co-aligned; the first source's `ended` event signals end.
-    state.activeSources[0].onended = () => {
-        if (state.isPlaying) stop();
+    // Bind onended only to *this* source. If a seek replaces state.activeSources
+    // with a fresh batch, the old onended firing must not stop the new sources.
+    const firstNew = state.activeSources[0];
+    firstNew.onended = () => {
+        if (state.isPlaying && state.activeSources[0] === firstNew) {
+            stop();
+        }
     };
 
     state.rafId = requestAnimationFrame(drawWaveformFrame);
 }
 
 function stop() {
+    const wasPlaying = state.isPlaying;
+    const ctxTime = state.audioCtx ? state.audioCtx.currentTime : 0;
+
     for (const src of state.activeSources) {
         try { src.stop(); } catch { /* already ended */ }
     }
@@ -470,7 +535,47 @@ function stop() {
     els.playBtn.textContent = '▶';
     if (state.rafId !== null) cancelAnimationFrame(state.rafId);
     state.rafId = null;
+
+    if (wasPlaying) {
+        // Capture the position we left off at, so a subsequent play() resumes
+        // from there. If the clip ended naturally (elapsed past duration),
+        // reset to 0 so the next play replays from the start.
+        const elapsed = ctxTime - state.playStartContextTime;
+        const buf = currentBuffer();
+        const dur = buf ? buf.duration : 0;
+        state.pausedOffset = (elapsed < 0 || elapsed >= dur) ? 0 : elapsed;
+    }
+
     drawIdleWaveform();
+}
+
+function currentBuffer() {
+    const urls = getActiveStemUrls();
+    return urls.length > 0 ? state.buffersByUrl.get(urls[0]) : null;
+}
+
+function clampOffset(seconds) {
+    const buf = currentBuffer();
+    if (!buf) return 0;
+    return Math.max(0, Math.min(buf.duration, seconds));
+}
+
+function seekToFraction(fraction) {
+    fraction = Math.max(0, Math.min(1, fraction));
+    const buf = currentBuffer();
+    if (!buf) return;
+    state.pausedOffset = fraction * buf.duration;
+    if (state.isPlaying) {
+        // Cheap approach: just update playStartContextTime so the on-screen
+        // cursor jumps. Audio sources keep going at the OLD position until
+        // pointer-up, when the pause/resume restart picks up the new offset.
+        // (Updating sources mid-drag would mean stop/start dozens of times
+        // per second; we settle on pointer-up instead.)
+        state.playStartContextTime =
+            state.audioCtx.currentTime - state.pausedOffset;
+    } else {
+        drawIdleWaveform();
+    }
 }
 
 // ============================================================
@@ -492,6 +597,14 @@ function drawIdleWaveform() {
     const buffer = state.buffersByUrl.get(urls[0]);
     if (!buffer) return;
     drawBufferOnCanvas(ctx, buffer, w, h);
+
+    // Show the playhead at pausedOffset whenever we're not currently playing.
+    // (During playback, drawWaveformFrame draws a moving cursor instead.)
+    if (state.pausedOffset > 0) {
+        const cursorX = (state.pausedOffset / buffer.duration) * w;
+        ctx.fillStyle = '#9a2a35';
+        ctx.fillRect(Math.max(0, cursorX - 1), 0, 2, h);
+    }
 }
 
 function drawWaveformFrame() {
@@ -602,6 +715,10 @@ function advance() {
     }
     updateRoundLabel();
     stop();
+    // Each round is a fresh listen — don't carry the previous round's
+    // playhead position over to the new (cumulative) stem mix.
+    state.pausedOffset = 0;
+    drawIdleWaveform();
 }
 
 function revealAnswer({ won, atRound }) {
