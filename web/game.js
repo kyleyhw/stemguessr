@@ -398,6 +398,11 @@ function attachWaveformScrub() {
 // ============================================================
 
 async function loadCurrentTrack() {
+    // Tear down any audio still running from the previous track. Without
+    // this, hitting "Next track" mid-playback leaves the old AudioBuffer-
+    // SourceNodes alive and they keep playing under the new round label.
+    stop();
+
     state.round = 0;
     state.guesses = [];
     state.pausedOffset = 0;
@@ -725,6 +730,14 @@ function advance() {
 
 function revealAnswer({ won, atRound }) {
     stop();
+
+    // Promote the player to the full-mix view — every stem revealed —
+    // so the auto-play below renders the complete clip rather than
+    // whatever partial round the player was on.
+    state.round = state.manifest.stems.length - 1;
+    state.pausedOffset = 0;
+    updateRoundLabel();
+
     const track = state.trackOrder[state.currentIndex];
 
     // Album cover takes the place of the waveform — same fixed-height slot,
@@ -749,7 +762,11 @@ function revealAnswer({ won, atRound }) {
     els.revealInfo.hidden = false;
     els.guessInput.disabled = true;
     els.skipBtn.disabled = true;
-    els.playBtn.disabled = false;  // user may want to re-listen
+    els.playBtn.disabled = false;  // user may want to pause / re-listen
+
+    // Auto-play the full mix from the start, so the reveal *is* the song
+    // playing in full, not just a static answer card.
+    play();
 }
 
 function clearRevealView() {
