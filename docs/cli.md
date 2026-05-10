@@ -15,23 +15,35 @@ stemguessr --version
 
 ## What `ingest` does
 
-```
-Public Spotify playlist URL
-        │
-        ▼
-[ parse_playlist_id ]            (pure function)
-        │
-        ▼
-[ Spotify embed page ]           (no auth; parses __NEXT_DATA__ JSON)
-        │
-        ▼  list of Track(spotify_id, title, artists, duration_ms, preview_url)
-   for each track (optionally capped by --limit):
-        ├── skip if no preview_url from Spotify
-        ├── (optional) clear cached preview/stems if --force-refresh
-        ├── download_preview(url, spotify_id, cache_dir)   → cached MP3
-        └── separate(preview)                              → stems/<id>/*.wav
-        ▼
-[ build_manifest(entries) ]      → cache/manifest.json
+```mermaid
+flowchart TD
+    URL[Public Spotify playlist URL]
+    Parse["parse_playlist_id<br/><i>(pure function)</i>"]
+    Embed["fetch_playlist_tracks<br/>Spotify embed page → __NEXT_DATA__"]
+    Tracks["List of Track<br/>(spotify_id, title, artists,<br/>duration_ms, preview_url)"]
+    Limit{"--limit N<br/>given?"}
+    Cap[take first N tracks]
+
+    PerTrack["per track<br/>(in playlist order)"]
+    HasPreview{preview_url<br/>present?}
+    Skip[skip + warn on stderr]
+    Force{"--force-refresh?"}
+    Clear[clear cached<br/>preview + stems]
+    Download["download_preview<br/>→ previews/&lt;spotify_id&gt;.mp3"]
+    Separate["separate<br/>→ stems/&lt;spotify_id&gt;/*.wav"]
+    Entry["TrackBuildEntry"]
+
+    Manifest["build_manifest(entries)<br/>→ cache/manifest.json"]
+
+    URL --> Parse --> Embed --> Tracks --> Limit
+    Limit -- yes --> Cap --> PerTrack
+    Limit -- no --> PerTrack
+    PerTrack --> HasPreview
+    HasPreview -- no --> Skip
+    HasPreview -- yes --> Force
+    Force -- yes --> Clear --> Download
+    Force -- no --> Download
+    Download --> Separate --> Entry --> Manifest
 ```
 
 The whole pipeline is a single linear function; per-track failures (Spotify did not provide a preview URL) are reported on stderr and skipped without aborting the run.

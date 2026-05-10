@@ -1,4 +1,4 @@
-# Frontend Architecture
+    # Frontend Architecture
 
 This document describes the static browser frontend in [`web/`](../web/): a single HTML file, a single CSS file, and a single ES module of vanilla JavaScript. There is no framework, no bundler, and no build step.
 
@@ -31,81 +31,42 @@ python -m http.server 8000
 
 The full state machine, including the per-round branches the player drives:
 
-```
-[ Page load ]
-       │
-       ▼
-   fetch manifest.json
-       │
-       ▼
-   schema.version == 1 ? ──── no ──→  ERROR (status line, halt)
-       │
-      yes
-       ▼
-   shuffle tracks  (Fisher–Yates, in place)
-       │
-       ▼
-┌──────────────────────────────────────────────────────────────┐
-│ TRACK_LOAD     current = trackOrder[i]                       │
-│                round ← 0;  guess list cleared                │
-│                fetch + decode an AudioBuffer for every stem  │
-└──────────────────────┬───────────────────────────────────────┘
-                       │
-                       ▼
-┌──────────────────────────────────────────────────────────────┐
-│ ROUND k        0 ≤ k < N  where N = manifest.stems.length    │
-│                active stems = stems[0..k]   (cumulative)     │
-│                                                              │
-│   Controls available to the player:                          │
-│     ▶/■   Play / pause synchronised stem playback            │
-│     vol   Master gain slider (0 .. 0.25, default 0.1)        │
-│     ⏎    Submit typed guess                                  │
-│     skip  Skip this round                                    │
-└──────────────────────┬───────────────────────────────────────┘
-                       │
-        ┌──────────────┼──────────────────┬─────────────────────┐
-        │              │                  │                     │
-   correct guess   wrong guess          skip                    │
-   (title match)                                                │
-        │              │                  │                     │
-        ▼              ▼                  ▼                     │
-   stop playback  stop playback      stop playback              │
-   append to list append to list     append "— skipped —"       │
-     (.correct)                       (.skipped)                │
-        │              │                  │                     │
-        │           k ← k + 1         k ← k + 1                 │
-        │              │                  │                     │
-        │       ┌──────┴──────┐    ┌──────┴──────┐              │
-        │       │             │    │             │              │
-        │     k < N         k = N  k < N       k = N            │
-        │       │             │    │             │              │
-        │       └─ ROUND k ─┐ │    └─ ROUND k ─┐ │              │
-        │                   │ │                │ │              │
-        ▼                   ▼ ▼                ▼ ▼              │
-┌──────────────────────────────────────────────────────────────┐│
-│ REVEAL                                                       ││
-│   show track.title  +  track.artists.join(", ")              ││
-│   show outcome:                                              ││
-│     "solved on round (k+1) of N"   (won path)                ││
-│     "no win — out of guesses"      (k = N path)              ││
-│   disable guess input + skip                                 ││
-│   re-enable play (allow re-listen)                           ││
-│   show  Next track →                                         ││
-└──────────────────────┬───────────────────────────────────────┘│
-                       │                                         │
-                       ▼                                         │
-                  i ← i + 1                                      │
-                       │                                         │
-              ┌────────┴────────┐                                │
-              │                 │                                │
-        i < tracks.length    i = tracks.length                   │
-              │                 │                                │
-              └─ TRACK_LOAD ────┘                                │
-                       │
-                       ▼
-              PLAYLIST_COMPLETE
-              (status line "🎉 Playlist complete.";
-               all interactive controls disabled)
+```mermaid
+flowchart TD
+    Start([Page load])
+    Fetch[fetch manifest.json]
+    Schema{schema.version == 1?}
+    Error[ERROR<br/>status line, halt]
+    Shuffle[shuffle tracks<br/>Fisher–Yates, in place]
+
+    TrackLoad["TRACK_LOAD<br/>current = trackOrder[i]<br/>round ← 0; clear guess list<br/>fetch + decode AudioBuffers"]
+
+    Round["ROUND k     (0 ≤ k &lt; N, N = stems.length)<br/>active stems = stems[0..k]<br/>controls: ▶/■, vol, ⏎ guess, skip"]
+
+    Correct{Player input}
+    StopOnWin[stop playback<br/>append guess as <i>.correct</i>]
+    StopOnWrong[stop playback<br/>append guess]
+    StopOnSkip[stop playback<br/>append <i>— skipped —</i>]
+    Advance[k ← k + 1]
+    CheckRound{k &lt; N?}
+
+    Reveal["REVEAL<br/>show title + artists<br/>show outcome (solved on round k+1 / no win)<br/>disable guess + skip<br/>show Next track →"]
+    NextI[i ← i + 1]
+    CheckPlaylist{i &lt; tracks.length?}
+    Complete["PLAYLIST_COMPLETE<br/>🎉 status; controls disabled"]
+
+    Start --> Fetch --> Schema
+    Schema -- "no" --> Error
+    Schema -- "yes" --> Shuffle --> TrackLoad --> Round --> Correct
+    Correct -- "correct guess<br/>(title match)" --> StopOnWin --> Reveal
+    Correct -- "wrong guess" --> StopOnWrong --> Advance
+    Correct -- "skip" --> StopOnSkip --> Advance
+    Advance --> CheckRound
+    CheckRound -- "yes" --> Round
+    CheckRound -- "no (k = N)" --> Reveal
+    Reveal --> NextI --> CheckPlaylist
+    CheckPlaylist -- "yes" --> TrackLoad
+    CheckPlaylist -- "no" --> Complete
 ```
 
 Runtime state lives in the single `state` object at the top of `game.js`; the rest of the file is functions that read and mutate it. There is no two-way data binding and no re-render loop — the DOM is updated imperatively at the few transition points that need it.
@@ -118,11 +79,13 @@ Per round, `play()` creates one [`AudioBufferSourceNode`](https://developer.mozi
 
 A single master [`GainNode`](https://developer.mozilla.org/en-US/docs/Web/API/GainNode) sits between every source and `audioCtx.destination`, driven by the volume slider:
 
-```
-source₁ ┐
-source₂ ├──►  masterGain  ──►  audioCtx.destination
-source₃ ┤      (0 .. 0.25,
-source₄ ┘       default 0.1)
+```mermaid
+flowchart LR
+    s1[source 1] --> mg
+    s2[source 2] --> mg
+    s3[source 3] --> mg
+    s4[source 4] --> mg
+    mg["masterGain<br/>(0 .. 0.25, default 0.1)"] --> dest[audioCtx.destination]
 ```
 
 The reason for the deliberately low default and capped maximum: stems are summed (not averaged) at the destination, and the unmixed sum of four sources can exceed unity gain by a wide margin, especially after Demucs's reconstruction. Capping at 0.25 keeps even the noisiest mix below clipping and the default at 0.1 protects unsuspecting listeners with headphones.

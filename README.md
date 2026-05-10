@@ -1,6 +1,6 @@
 # StemGuessr
 
-A music-guessing game in the Bandle / Heardle family, built around source-separated stems. Given a Spotify public playlist URL, the ingest pipeline pulls 30-second previews via the iTunes Search API (with Deezer as fallback), separates each clip into instrument stems with Demucs, and serves them to a static browser frontend that reveals one stem per round of guessing.
+A music-guessing game in the Bandle / Heardle family, built around source-separated stems. Given any *public* Spotify playlist URL, the ingest pipeline parses Spotify's own embed page for the playlist (no auth required), downloads each track's 30-second preview from Spotify's CDN, separates the clip into instrument stems with Demucs, and serves the stems to a static browser frontend that reveals one stem per round of guessing.
 
 ## Status
 
@@ -8,35 +8,30 @@ A music-guessing game in the Bandle / Heardle family, built around source-separa
 
 ## System architecture
 
-The pipeline has four stages: three off-line and one in the browser.
+The pipeline has three stages: two off-line and one in the browser.
 
-1. **Spotify Web API** (off-line, Client Credentials flow). Given a public playlist URL, fetch the track list with metadata: title, artist, duration, and the ISRC (`external_ids.isrc`). Spotify itself never returns raw audio.
-2. **Preview source lookup** (off-line, public REST). For each ISRC, query Apple's iTunes Search API (`/lookup?isrc=...`) for a 30-second AAC `previewUrl`. On miss, fall back to Deezer (`/track/isrc:{ISRC}`) for a 30-second MP3. Combined coverage is essentially complete for any track on Spotify.
-3. **Demucs source separation** (off-line, on-disk cache). Each cached preview is split into stems — by default `{drums, bass, vocals, other}` using `htdemucs`, optionally six stems via `htdemucs_6s` which adds `{guitar, piano}`.
-4. **Static frontend** (browser). A single `index.html` fetches `manifest.json` and plays stems through `<audio>` elements. The game reveals one stem per round; the player has four guesses.
+1. **Spotify embed parsing** (off-line, no auth). Fetch `https://open.spotify.com/embed/playlist/<id>`, extract the `__NEXT_DATA__` JSON the Next.js page embeds for its React client. Each track in that JSON carries title, artist names, duration, and a direct 30-second MP3 preview URL on Spotify's CDN. The CDN URL is downloaded into the on-disk cache.
+2. **Demucs source separation** (off-line, on-disk cache). Each cached preview is split into stems — by default `{drums, bass, vocals, other}` using `htdemucs`, optionally six stems via `htdemucs_6s` which adds `{guitar, piano}`. Outputs are WAV per stem under `stems/<spotify_id>/`.
+3. **Static frontend** (browser). A single `index.html` fetches `manifest.json` and plays stems through Web Audio `AudioBufferSourceNode`s, summed through a master `GainNode` for volume control. The game reveals one stem per round; the player has four guesses (six in 6-stem mode).
 
-```
-Spotify playlist URL
-        │
-        ▼
-┌─────────────────────┐
-│   Spotify Web API   │  ──►  list of tracks with ISRCs
-└─────────────────────┘
-        │
-        ▼
-┌─────────────────────┐
-│  iTunes ▶ Deezer    │  ──►  30 s preview MP3/AAC (cached on disk)
-└─────────────────────┘
-        │
-        ▼
-┌─────────────────────┐
-│  Demucs (htdemucs)  │  ──►  {drums, bass, vocals, other}.wav
-└─────────────────────┘
-        │
-        ▼
-┌─────────────────────┐
-│    manifest.json    │  ──►  static frontend  ──►  game
-└─────────────────────┘
+```mermaid
+flowchart TD
+    A[Public Spotify playlist URL]
+    B["open.spotify.com/embed/playlist/&lt;id&gt;<br/>parse __NEXT_DATA__ JSON"]
+    C["Tracks with title, artists,<br/>duration, preview_url"]
+    D["Disk cache:<br/>previews/&lt;spotify_id&gt;.mp3"]
+    E["Demucs htdemucs<br/>4-stem (or htdemucs_6s, 6-stem)"]
+    F["stems/&lt;spotify_id&gt;/{drums,bass,vocals,other}.wav"]
+    G["manifest.json"]
+    H["Static browser game<br/>(Web Audio + Canvas)"]
+
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E --> F
+    F --> G
+    G --> H
 ```
 
 ## Source separation, briefly
@@ -49,7 +44,7 @@ $x(t) = \sum_{i=1}^{N} s_i(t)$, recover each source $s_i(t)$ for $i \in \{1, \do
 
 The two branch outputs are summed in the time domain to give the final source estimates $\hat{s}_i(t)$. The hybrid design is motivated by the empirical observation that some sources (drums, transients) are better separated in the time domain, while others (sustained tones, harmonic content) are better separated in the spectrogram domain.
 
-A full derivation — including the training objective, mask parameterisation, and the choice of `htdemucs` over baseline Demucs — will be added in [`docs/separation.md`](docs/separation.md) when **Phase 4** lands.
+A full derivation — training objective (L1 + multi-resolution STFT), complex-mask parameterisation, the HT transformer extension, and the choice of `htdemucs` over baseline Demucs — is in [`docs/separation.md`](docs/separation.md).
 
 ## Repository layout
 
