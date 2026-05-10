@@ -23,12 +23,14 @@ from pathlib import Path
 #
 # Vocals are placed last because the lyrics + identifiable singer make them
 # the easiest stem to identify a song from; revealing them first would
-# trivialise the guessing loop. The ordering progresses from rhythm-only
-# (drums, bass) through harmonic content (other; plus guitar and piano in
-# the 6-stem variant) to vocals.
+# trivialise the guessing loop. The progression for 6-stem is
+# rhythm (drums, bass) → tonally-distinct named instruments (piano, guitar)
+# → ambiguous residual (other) → vocals. "other" sits closest to vocals
+# because it tends to carry the most identifying harmonic / synth content
+# in modern pop.
 MODEL_STEMS: dict[str, tuple[str, ...]] = {
     "htdemucs": ("drums", "bass", "other", "vocals"),
-    "htdemucs_6s": ("drums", "bass", "other", "guitar", "piano", "vocals"),
+    "htdemucs_6s": ("drums", "bass", "piano", "guitar", "other", "vocals"),
 }
 
 

@@ -41,14 +41,13 @@ class TestModelStems:
         assert MODEL_STEMS["htdemucs"] == ("drums", "bass", "other", "vocals")
 
     def test_htdemucs_6s_extends_to_guitar_piano(self) -> None:
-        # Same vocals-last principle; harmonic content (other, guitar, piano)
-        # sits between rhythm and vocals.
+        # 6-stem reveal order: rhythm → named instruments → residual → vocals.
         assert MODEL_STEMS["htdemucs_6s"] == (
             "drums",
             "bass",
-            "other",
-            "guitar",
             "piano",
+            "guitar",
+            "other",
             "vocals",
         )
 
