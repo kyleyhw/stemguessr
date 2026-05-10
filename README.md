@@ -4,24 +4,27 @@ A music-guessing game built around source-separated stems. Given any *public* Sp
 
 ## Quickstart
 
-One command from clone to playable. **No Spotify credentials needed** — playlist data and preview URLs come from Spotify's public embed page.
+> **Requirements** — Python 3.12+ and [`uv`](https://docs.astral.sh/uv/) on `PATH`. No Spotify credentials.
+
+**1. Install.**
 
 ```bash
-# 1. Clone and install (Python 3.12+ required; uv will fetch if missing)
 git clone https://github.com/kyleyhw/stemguessr.git
 cd stemguessr
 uv sync
-
-# 2. Run the server.
-uv run stemguessr serve --out ./cache
-
-# 3. Open http://localhost:8765/ in a Chromium-based browser, paste a
-#    public Spotify playlist URL into the form, and play. The first run
-#    downloads ~250 MB of Demucs weights; subsequent tracks separate in
-#    ~5-15 s on CPU and become playable as soon as they finish.
 ```
 
-For non-interactive batch use, the underlying ingest is also exposed as `stemguessr ingest <url> [--out PATH] [--stems {4,6}] [--limit N] [--force-refresh]`. See [`docs/cli.md`](docs/cli.md).
+**2. Run the server.**
+
+```bash
+uv run stemguessr serve --out ./cache
+```
+
+**3. Open <http://localhost:8765/>**, paste a public Spotify playlist URL into the form, and play.
+
+The first invocation downloads ~250 MB of Demucs weights, after which each track separates in ~5–15 s on CPU and becomes playable the moment it finishes. Re-running against the same playlist is a cache hit (no network, no Demucs).
+
+For non-interactive use, `stemguessr ingest <url> [--out PATH] [--stems {4,6}] [--limit N] [--force-refresh]` runs the same pipeline without the server — see [`docs/cli.md`](docs/cli.md).
 
 ## Status
 
@@ -149,13 +152,3 @@ uv run pre-commit run --all-files
 uv run pytest
 ```
 
-## Legal posture
-
-- The repository contains **code only**. No audio is committed, ever.
-- Users supply their own Spotify public playlist URL. No Spotify Premium account is required for ingestion (Client Credentials flow is sufficient for public playlist metadata).
-- Audio is fetched at runtime from public preview endpoints (iTunes Search API; Deezer public API). These previews are not redistributed by this project; they are downloaded into a local on-disk cache for the user's own use.
-- Users are responsible for compliance with the terms of the third-party APIs they query through this tool.
-
-## License
-
-[MIT](LICENSE).
