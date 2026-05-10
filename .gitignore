@@ -64,6 +64,13 @@ stems/
 models/
 .demucs/
 
+# --- Local ingest output (any *_cache/ directory at repo root) ---
+test_cache/
+
+# --- Playwright MCP artefacts and ad-hoc screenshots at repo root ---
+.playwright-mcp/
+/phase*_ui_*.png
+
 # --- Logs ---
 *.log
 logs/

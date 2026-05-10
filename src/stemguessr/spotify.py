@@ -1,45 +1,73 @@
-"""Spotify Web API integration: playlist URL parsing and track listing extraction.
+"""Spotify public-playlist ingest via the open.spotify.com embed page.
 
-Uses the spotipy library with the OAuth 2.0 Client Credentials flow. No user
-OAuth required; public playlist metadata is sufficient for the StemGuessr
-ingest pipeline.
+No authentication is required: this module never calls the authenticated
+Spotify Web API. Instead, it fetches the public embed page that Spotify
+itself uses to display playlists in third-party iframes, parses the
+``__NEXT_DATA__`` JSON payload that the page embeds for the React client,
+and returns a list of :class:`Track` objects.
 
-Environment variables (read on demand by :func:`get_client`):
+A side benefit of this approach: each track in the embed JSON carries a
+direct ``audioPreview.url`` to a 30-second MP3 hosted on Spotify's CDN
+(``p.scdn.co``). Downstream consumers can download from that URL directly,
+avoiding the iTunes / Deezer ISRC-based detour that earlier versions of
+this code used. ISRCs are not exposed on this code path; track identity is
+keyed by Spotify ID instead.
 
-    SPOTIFY_CLIENT_ID:     Spotify app client ID
-    SPOTIFY_CLIENT_SECRET: Spotify app client secret
+Public API:
 
-Register an application at https://developer.spotify.com/dashboard.
+* :func:`parse_playlist_id` — playlist URL/URI → 22-char playlist ID.
+* :func:`fetch_playlist_tracks` — playlist URL/URI → list of :class:`Track`.
+* :class:`Track` — immutable per-track metadata + preview URL.
+* :class:`SpotifyError` — raised for parse / fetch / structural failures.
 """
 
 from __future__ import annotations
 
-import os
+import json
 import re
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
 
-import spotipy
-from spotipy.oauth2 import SpotifyClientCredentials
+import httpx
 
 # Spotify object IDs are 22-char base-62 (alphanumeric, no padding). This pattern
 # applies uniformly to playlists, albums, tracks, and artists.
 _PLAYLIST_ID_PATTERN = re.compile(r"^[A-Za-z0-9]{22}$")
 
+# A modern desktop UA. Without this, Spotify's CDN may return 403.
+_BROWSER_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/120.0.0.0 Safari/537.36"
+)
+
+EMBED_URL_TEMPLATE = "https://open.spotify.com/embed/playlist/{playlist_id}"
+_NEXT_DATA_PATTERN = re.compile(
+    r'<script[^>]+id="__NEXT_DATA__"[^>]*>(.*?)</script>',
+    re.DOTALL,
+)
+
 
 @dataclass(frozen=True, slots=True)
 class Track:
-    """Minimal track metadata extracted from Spotify, sufficient for downstream
-    ISRC-based preview lookup.
+    """Per-track metadata extracted from the Spotify embed page.
 
     Attributes:
         spotify_id: 22-char Spotify track ID.
-        isrc: International Standard Recording Code; the lookup key for iTunes /
-            Deezer preview retrieval (Phase 3). May be None when Spotify omits it.
+        isrc: International Standard Recording Code. Always ``None`` on the
+            embed-based path; retained for forwards-compatibility with any
+            future authenticated path that does expose it.
         title: Track title as Spotify reports it.
-        artists: Tuple of artist names in Spotify's billing order.
+        artists: Tuple of artist names. Spotify's embed concatenates them
+            into a single ``subtitle`` string; this module splits on the
+            common ``, `` separator to recover individuals (best-effort —
+            artists with literal commas in their stage names are not handled).
         duration_ms: Track duration in milliseconds.
+        preview_url: Direct URL to a ~30-second MP3 preview hosted on
+            Spotify's CDN (``p.scdn.co``). May be ``None`` when Spotify
+            does not provide a preview for the track (regional restriction,
+            takedown, etc.).
     """
 
     spotify_id: str
@@ -47,10 +75,13 @@ class Track:
     title: str
     artists: tuple[str, ...]
     duration_ms: int
+    preview_url: str | None
 
 
 class SpotifyError(RuntimeError):
-    """Raised when Spotify API access fails or input is malformed."""
+    """Raised when Spotify input is malformed, the embed page cannot be
+    fetched, or the embedded JSON's structure does not match expectations.
+    """
 
 
 def parse_playlist_id(url_or_uri: str) -> str:
@@ -63,19 +94,17 @@ def parse_playlist_id(url_or_uri: str) -> str:
         https://open.spotify.com/playlist/<id>?si=<share_token>
         https://open.spotify.com/intl-XX/playlist/<id>[?...]
 
-    Args:
-        url_or_uri: A string that may carry a playlist identifier.
-
-    Returns:
-        The 22-character base-62 playlist ID.
-
     Raises:
-        SpotifyError: If the input does not match any known playlist URL/URI
-            form, or the extracted ID fails the base-62 length/charset check.
+        SpotifyError: Input does not match a known playlist URL/URI form,
+            or the extracted ID fails the base-62 length/charset check.
     """
     s = url_or_uri.strip()
     if not s:
         raise SpotifyError("Empty playlist URL/URI")
+
+    # Bare ID — accept it directly (the pattern doubles as a validity check).
+    if _PLAYLIST_ID_PATTERN.match(s):
+        return s
 
     if s.startswith("spotify:playlist:"):
         playlist_id = s[len("spotify:playlist:") :]
@@ -102,95 +131,101 @@ def parse_playlist_id(url_or_uri: str) -> str:
     return playlist_id
 
 
-def get_client(
-    client_id: str | None = None,
-    client_secret: str | None = None,
-) -> spotipy.Spotify:
-    """Construct a spotipy client using the Client Credentials flow.
-
-    Falls back to the ``SPOTIFY_CLIENT_ID`` and ``SPOTIFY_CLIENT_SECRET``
-    environment variables when arguments are not provided.
-
-    The returned client lazily fetches its access token on first API call;
-    construction itself does not contact Spotify, so this function is safe
-    to call in offline tests with dummy credentials.
-
-    Raises:
-        SpotifyError: If neither argument nor environment variable is set
-            for either credential.
-    """
-    cid = client_id or os.environ.get("SPOTIFY_CLIENT_ID")
-    cs = client_secret or os.environ.get("SPOTIFY_CLIENT_SECRET")
-    if not cid or not cs:
-        raise SpotifyError(
-            "Spotify credentials not configured. "
-            "Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET environment "
-            "variables, or pass them explicitly to get_client()."
-        )
-    auth = SpotifyClientCredentials(client_id=cid, client_secret=cs)
-    return spotipy.Spotify(auth_manager=auth)
-
-
-def _track_from_item(item: dict[str, Any]) -> Track | None:
-    """Build a Track from one element of /playlist/{id}/tracks `items`.
-
-    Returns None for null tracks (local files, removed tracks, podcasts), which
-    Spotify represents as items with ``track=None`` or ``track.id=None``.
-    """
-    track = item.get("track")
-    if not track or not track.get("id"):
-        return None
-    external_ids = track.get("external_ids") or {}
-    return Track(
-        spotify_id=track["id"],
-        isrc=external_ids.get("isrc"),
-        title=track["name"],
-        artists=tuple(a["name"] for a in track.get("artists", [])),
-        duration_ms=int(track["duration_ms"]),
-    )
-
-
 def fetch_playlist_tracks(
-    client: spotipy.Spotify,
-    playlist_id: str,
+    playlist_url_or_id: str,
     *,
-    page_size: int = 100,
+    client: httpx.Client | None = None,
 ) -> list[Track]:
-    """Fetch all tracks from a Spotify public playlist, paginating through the response.
-
-    Spotify's playlist tracks endpoint returns at most ``page_size`` items per
-    call (cap is 100). This function follows the ``next`` link until exhausted.
-
-    Local files, removed tracks, and podcast episodes are silently skipped
-    (see :func:`_track_from_item`).
+    """Fetch all tracks of a public Spotify playlist via the embed page.
 
     Args:
-        client: Authenticated spotipy client (see :func:`get_client`).
-        playlist_id: The 22-char playlist ID (see :func:`parse_playlist_id`).
-        page_size: Page size; Spotify caps this at 100. Default 100.
+        playlist_url_or_id: Any URL/URI form accepted by
+            :func:`parse_playlist_id`, or a bare playlist ID.
+        client: Optional pre-built ``httpx.Client``; an internal one is
+            created and disposed otherwise.
 
     Returns:
-        List of :class:`Track` objects in playlist order.
+        A list of :class:`Track` objects in playlist order. Tracks for which
+        the embed page lacked an ``audioPreview.url`` still appear, with
+        ``preview_url=None`` — the caller decides how to handle them.
 
     Raises:
-        spotipy.exceptions.SpotifyException: On API errors. Not caught here;
-            the caller decides on retry / abort policy.
+        SpotifyError: ID parse failure, HTTP fetch failure, ``__NEXT_DATA__``
+            absent from the page, or expected JSON path missing.
     """
-    fields = "items(track(id,name,duration_ms,external_ids,artists(name))),next"
-    tracks: list[Track] = []
-    offset = 0
-    while True:
-        page = client.playlist_items(
-            playlist_id,
-            offset=offset,
-            limit=page_size,
-            fields=fields,
+    playlist_id = parse_playlist_id(playlist_url_or_id)
+    url = EMBED_URL_TEMPLATE.format(playlist_id=playlist_id)
+
+    owns_client = client is None
+    if client is None:
+        client = httpx.Client(
+            headers={"User-Agent": _BROWSER_USER_AGENT},
+            follow_redirects=True,
+            timeout=10.0,
         )
-        for item in page.get("items", []):
-            track = _track_from_item(item)
-            if track is not None:
-                tracks.append(track)
-        if not page.get("next"):
-            break
-        offset += page_size
-    return tracks
+    try:
+        response = client.get(url)
+    except httpx.HTTPError as e:
+        raise SpotifyError(f"Failed to fetch embed page: {e}") from e
+    finally:
+        if owns_client:
+            client.close()
+
+    if response.status_code != 200:
+        raise SpotifyError(
+            f"Embed page returned HTTP {response.status_code}; "
+            "playlist may be private or removed."
+        )
+
+    data = _extract_next_data(response.text)
+    try:
+        track_items = data["props"]["pageProps"]["state"]["data"]["entity"]["trackList"]
+    except (KeyError, TypeError) as e:
+        raise SpotifyError(
+            "Could not locate trackList in embed JSON; Spotify's page "
+            "structure may have changed."
+        ) from e
+
+    return [_track_from_embed_item(item) for item in track_items]
+
+
+def _extract_next_data(html: str) -> dict[str, Any]:
+    """Extract the ``__NEXT_DATA__`` JSON blob from a Spotify embed page.
+
+    Spotify's embed pages render with Next.js; the React client receives its
+    initial state from a single inline ``<script id="__NEXT_DATA__">`` tag,
+    which is exactly what we want.
+    """
+    match = _NEXT_DATA_PATTERN.search(html)
+    if not match:
+        raise SpotifyError(
+            "Embed page did not contain __NEXT_DATA__ script tag; "
+            "Spotify may have changed the page structure."
+        )
+    try:
+        return json.loads(match.group(1))
+    except json.JSONDecodeError as e:
+        raise SpotifyError(f"__NEXT_DATA__ was not valid JSON: {e}") from e
+
+
+def _track_from_embed_item(item: dict[str, Any]) -> Track:
+    """Build a :class:`Track` from one element of ``trackList``."""
+    uri = item.get("uri", "")
+    spotify_id = uri.split(":")[-1] if uri else ""
+
+    subtitle = item.get("subtitle", "") or ""
+    # Spotify renders artist lists as "Artist 1, Artist 2" (note: NBSP after
+    # the comma in some locales). Split on a comma followed by any whitespace.
+    artists = tuple(a.strip() for a in re.split(r",[\s ]*", subtitle) if a.strip())
+
+    audio_preview = item.get("audioPreview") or {}
+    preview_url = audio_preview.get("url")
+
+    return Track(
+        spotify_id=spotify_id,
+        isrc=None,
+        title=item.get("title", "") or "",
+        artists=artists,
+        duration_ms=int(item.get("duration", 0) or 0),
+        preview_url=preview_url,
+    )

@@ -1,8 +1,9 @@
 """Tests for stemguessr.cli — the orchestration layer.
 
-Each pipeline stage (Spotify, sources, separate, manifest) is mocked at the
-``stemguessr.cli`` import boundary, so these tests exercise the orchestration
-logic alone — error handling, skip-on-miss, force-refresh, exit codes.
+Each pipeline stage (Spotify, preview download, separation, manifest) is
+mocked at the ``stemguessr.cli`` import boundary, so these tests exercise
+the orchestration logic alone — error handling, skip-on-miss, force-refresh,
+exit codes, --version, --limit.
 """
 
 from __future__ import annotations
@@ -26,20 +27,22 @@ VALID_PLAYLIST_URL = "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M"
 VALID_PLAYLIST_ID = "37i9dQZF1DXcBWIGoYBM5M"
 
 
+_DEFAULT_PREVIEW = "https://p.scdn.co/mp3-preview/default"
+
+
 def _make_track(
     spotify_id: str,
-    isrc: str | None = None,
+    preview_url: str | None = _DEFAULT_PREVIEW,
     title: str = "Song",
     artists: tuple[str, ...] = ("Artist",),
 ) -> Track:
-    if isrc is None:
-        isrc = f"USXX{spotify_id[:8]}"
     return Track(
         spotify_id=spotify_id,
-        isrc=isrc,
+        isrc=None,
         title=title,
         artists=artists,
         duration_ms=200_000,
+        preview_url=preview_url,
     )
 
 
@@ -47,15 +50,13 @@ def _make_track(
 class StubState:
     """Mutable container shared between the fixture's fake stages and tests.
 
-    Tests pre-set ``tracks`` / ``preview_returns`` to control behaviour and
-    then read ``separate_calls`` / ``preview_calls`` to assert on what the
-    CLI did.
+    Tests pre-set ``tracks`` to control behaviour and read
+    ``download_calls`` / ``separate_calls`` to assert on what the CLI did.
     """
 
     tracks: list[Track] = field(default_factory=list)
-    preview_returns: dict[str, Path | None] = field(default_factory=dict)
+    download_calls: list[dict[str, Any]] = field(default_factory=list)
     separate_calls: list[dict[str, Any]] = field(default_factory=list)
-    preview_calls: list[str] = field(default_factory=list)
 
 
 @pytest.fixture
@@ -69,20 +70,23 @@ def stub_pipeline(monkeypatch: pytest.MonkeyPatch) -> StubState:
         tracks=[_make_track(f"tid{i}") for i in range(2)],
     )
 
-    def fake_get_client() -> object:
-        return object()
-
-    def fake_fetch_playlist_tracks(_client: object, playlist_id: str) -> list[Track]:
-        assert playlist_id == VALID_PLAYLIST_ID
+    def fake_fetch_playlist_tracks(playlist_url: str) -> list[Track]:
+        # Sanity: CLI passes the original URL straight through.
+        assert "spotify.com" in playlist_url or playlist_url.startswith("spotify:")
         return state.tracks
 
-    def fake_get_preview(isrc: str, cache_dir: Path) -> Path | None:
-        state.preview_calls.append(isrc)
-        if isrc in state.preview_returns:
-            return state.preview_returns[isrc]
+    def fake_download_preview(
+        url: str,
+        cache_key: str,
+        cache_dir: Path,
+        **_kwargs: Any,
+    ) -> Path:
+        state.download_calls.append(
+            {"url": url, "cache_key": cache_key, "cache_dir": cache_dir}
+        )
         previews = cache_dir / "previews"
         previews.mkdir(parents=True, exist_ok=True)
-        path = previews / f"{isrc}.m4a"
+        path = previews / f"{cache_key}.mp3"
         path.write_bytes(b"\x00" * 16)
         return path
 
@@ -100,11 +104,10 @@ def stub_pipeline(monkeypatch: pytest.MonkeyPatch) -> StubState:
             paths[stem] = p
         return paths
 
-    monkeypatch.setattr("stemguessr.cli.get_client", fake_get_client)
     monkeypatch.setattr(
         "stemguessr.cli.fetch_playlist_tracks", fake_fetch_playlist_tracks
     )
-    monkeypatch.setattr("stemguessr.cli.get_preview", fake_get_preview)
+    monkeypatch.setattr("stemguessr.cli.download_preview", fake_download_preview)
     monkeypatch.setattr("stemguessr.cli.separate", fake_separate)
     return state
 
@@ -114,7 +117,7 @@ class TestVersion:
         result = runner.invoke(app, ["--version"])
         assert result.exit_code == 0
         assert "stemguessr" in result.stdout
-        assert "0.1.0" in result.stdout
+        assert "0.1." in result.stdout  # 0.1.x
 
 
 class TestArgumentValidation:
@@ -169,26 +172,33 @@ class TestHappyPath:
         for call in stub_pipeline.separate_calls:
             assert call["model"] == "htdemucs_6s"
 
+    def test_download_called_with_track_preview_url(
+        self, stub_pipeline: StubState, tmp_path: Path
+    ) -> None:
+        """The CLI must pass each track's preview_url straight through to
+        download_preview, keyed by the track's Spotify ID.
+        """
+        runner.invoke(app, ["ingest", VALID_PLAYLIST_URL, "--out", str(tmp_path)])
+        assert len(stub_pipeline.download_calls) == 2
+        for i, call in enumerate(stub_pipeline.download_calls):
+            track = stub_pipeline.tracks[i]
+            assert call["url"] == track.preview_url
+            assert call["cache_key"] == track.spotify_id
+
 
 class TestSkipping:
-    def test_track_without_isrc_is_skipped(
+    def test_track_without_preview_url_is_skipped(
         self, stub_pipeline: StubState, tmp_path: Path
     ) -> None:
         stub_pipeline.tracks = [
             _make_track("a"),
-            Track(
-                spotify_id="b",
-                isrc=None,
-                title="Local",
-                artists=("Owner",),
-                duration_ms=0,
-            ),
+            _make_track("b", preview_url=None),
         ]
         result = runner.invoke(
             app, ["ingest", VALID_PLAYLIST_URL, "--out", str(tmp_path)]
         )
         assert result.exit_code == 0
-        assert "no ISRC" in result.stderr
+        assert "no preview from Spotify" in result.stderr
 
         manifest = json.loads(
             (tmp_path / MANIFEST_FILENAME).read_text(encoding="utf-8")
@@ -196,20 +206,30 @@ class TestSkipping:
         assert len(manifest["tracks"]) == 1
         assert manifest["tracks"][0]["spotify_id"] == "a"
 
-    def test_track_with_no_preview_is_skipped(
+
+class TestLimit:
+    def test_limit_caps_track_count(
         self, stub_pipeline: StubState, tmp_path: Path
     ) -> None:
-        stub_pipeline.preview_returns = {"USXXtid1": None}
+        stub_pipeline.tracks = [_make_track(f"id{i}") for i in range(5)]
         result = runner.invoke(
-            app, ["ingest", VALID_PLAYLIST_URL, "--out", str(tmp_path)]
+            app,
+            [
+                "ingest",
+                VALID_PLAYLIST_URL,
+                "--out",
+                str(tmp_path),
+                "--limit",
+                "2",
+            ],
         )
         assert result.exit_code == 0
-        assert "no preview source has" in result.stderr
+        assert len(stub_pipeline.separate_calls) == 2
 
         manifest = json.loads(
             (tmp_path / MANIFEST_FILENAME).read_text(encoding="utf-8")
         )
-        assert len(manifest["tracks"]) == 1
+        assert len(manifest["tracks"]) == 2
 
 
 class TestForceRefresh:
@@ -217,12 +237,11 @@ class TestForceRefresh:
         self, stub_pipeline: StubState, tmp_path: Path
     ) -> None:
         track = stub_pipeline.tracks[0]
-        assert track.isrc is not None  # narrowed for type checker
-        isrc = track.isrc
+        track_id = track.spotify_id
         (tmp_path / "previews").mkdir()
-        stale_preview = tmp_path / "previews" / f"{isrc}.m4a"
+        stale_preview = tmp_path / "previews" / f"{track_id}.mp3"
         stale_preview.write_bytes(b"STALE")
-        stale_stem_dir = tmp_path / "stems" / isrc
+        stale_stem_dir = tmp_path / "stems" / track_id
         stale_stem_dir.mkdir(parents=True)
         (stale_stem_dir / "drums.wav").write_bytes(b"STALE")
 
@@ -238,7 +257,7 @@ class TestForceRefresh:
         )
         assert result.exit_code == 0
 
-        # Both files were re-created with non-stale content.
+        # Both files were re-created with non-stale content by the stubs.
         assert stale_preview.exists()
         assert stale_preview.read_bytes() != b"STALE"
         assert (stale_stem_dir / "drums.wav").read_bytes() != b"STALE"

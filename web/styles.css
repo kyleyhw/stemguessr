@@ -110,6 +110,47 @@ main {
     flex: 1;
 }
 
+.volume-control {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--ink-soft);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.volume-control input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 90px;
+    height: 4px;
+    background: var(--cream-shadow);
+    border-radius: 2px;
+    cursor: pointer;
+    outline: none;
+}
+
+.volume-control input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    background: var(--oxblood);
+    border-radius: 50%;
+    cursor: pointer;
+    border: 0;
+}
+
+.volume-control input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    background: var(--oxblood);
+    border-radius: 50%;
+    cursor: pointer;
+    border: 0;
+}
+
 /* Buttons */
 
 button {

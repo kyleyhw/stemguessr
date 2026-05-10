@@ -21,6 +21,8 @@ const state = {
     guesses: [],           // [{text, correct, skipped}]
     isPlaying: false,
     audioCtx: null,        // AudioContext (lazy: created on first play)
+    masterGain: null,      // GainNode all sources connect through; controls volume
+    volume: 0.1,           // 0..0.25 — initial volume kept low; full mix is hot
     buffersByUrl: new Map(),  // url -> AudioBuffer
     activeSources: [],     // currently-playing AudioBufferSourceNodes
     playStartContextTime: 0,  // audioCtx.currentTime at play() call
@@ -36,6 +38,7 @@ const els = {
     canvas:        document.getElementById('waveform'),
     playBtn:       document.getElementById('play-btn'),
     roundLabel:    document.getElementById('round-label'),
+    volumeSlider:  document.getElementById('volume-slider'),
     guessInput:    document.getElementById('guess-input'),
     guessForm:     document.getElementById('guess-form'),
     skipBtn:       document.getElementById('skip-btn'),
@@ -95,6 +98,17 @@ function wireEvents() {
     });
     els.skipBtn.addEventListener('click', skip);
     els.nextBtn.addEventListener('click', nextTrack);
+
+    // Initialise slider to the documented default; user adjustments live-update
+    // the master gain.
+    els.volumeSlider.value = String(state.volume);
+    els.volumeSlider.addEventListener('input', () => {
+        const v = parseFloat(els.volumeSlider.value);
+        if (Number.isFinite(v)) {
+            state.volume = v;
+            if (state.masterGain) state.masterGain.gain.value = v;
+        }
+    });
 }
 
 // ============================================================
@@ -147,6 +161,11 @@ async function loadBuffer(url) {
         // require a started context).
         const Ctx = window.AudioContext || window.webkitAudioContext;
         state.audioCtx = new Ctx();
+        // Insert a master GainNode between every source and the destination
+        // so the volume slider has somewhere to attach.
+        state.masterGain = state.audioCtx.createGain();
+        state.masterGain.gain.value = state.volume;
+        state.masterGain.connect(state.audioCtx.destination);
     }
     const response = await fetch(url, { cache: 'force-cache' });
     if (!response.ok) {
@@ -189,7 +208,7 @@ function play() {
     state.activeSources = urls.map((url) => {
         const src = state.audioCtx.createBufferSource();
         src.buffer = state.buffersByUrl.get(url);
-        src.connect(state.audioCtx.destination);
+        src.connect(state.masterGain);
         src.start();
         return src;
     });

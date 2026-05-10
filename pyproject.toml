@@ -1,6 +1,6 @@
 [project]
 name = "stemguessr"
-version = "0.1.0"
+version = "0.1.1"
 description = "A Bandle-style music-guessing game built around Demucs-separated stems from a Spotify public playlist URL."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -11,6 +11,7 @@ requires-python = ">=3.12"
 dependencies = [
     "demucs>=4.0.1",
     "httpx>=0.28.1",
+    "soundfile>=0.13.1",
     "spotipy>=2.26.0",
     "typer>=0.25.1",
 ]

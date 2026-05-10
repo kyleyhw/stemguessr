@@ -34,27 +34,63 @@ def _run_demucs(
     output_dir: Path,
     model: str,
 ) -> dict[str, Path]:
-    """Real Demucs invocation: load model, run inference, write per-stem WAVs.
+    """Real Demucs invocation: load pretrained model, apply it to the audio,
+    write per-stem WAVs.
 
-    This function is the seam tests monkeypatch. Replacing it with a fake
-    avoids the multi-hundred-megabyte model download on first run and the
-    slow CPU inference path that would otherwise dominate the test suite.
+    Uses Demucs's lower-level API (``apply_model`` + ``get_model``) rather
+    than the higher-level ``demucs.api.Separator`` which is only present in
+    Demucs 4.1+. This works back to Demucs 4.0.
+
+    This function is the seam tests monkeypatch — replacing it avoids the
+    multi-hundred-megabyte model download on first run and the slow CPU
+    inference path that would otherwise dominate the test suite.
 
     The torch / torchaudio / demucs imports are deferred to call time so
     that merely importing :mod:`stemguessr.separate` stays cheap.
     """
+    import soundfile as sf  # ty: ignore[unresolved-import]
+    import torch  # ty: ignore[unresolved-import]
     import torchaudio  # ty: ignore[unresolved-import]
-    from demucs.api import Separator  # ty: ignore[unresolved-import]
+    from demucs.apply import apply_model  # ty: ignore[unresolved-import]
+    from demucs.pretrained import get_model  # ty: ignore[unresolved-import]
 
-    separator = Separator(model=model)
-    _, sources = separator.separate_audio_file(str(input_path))
+    pretrained = get_model(model)
+    pretrained.eval()
+
+    # Load via soundfile (libsndfile-backed; supports MP3/M4A/WAV without
+    # requiring FFmpeg). soundfile returns (frames, channels) float32.
+    audio, sample_rate = sf.read(str(input_path), dtype="float32", always_2d=True)
+    # → torch tensor of shape (channels, frames).
+    waveform = torch.from_numpy(audio.T).contiguous()
+
+    if sample_rate != pretrained.samplerate:
+        waveform = torchaudio.functional.resample(
+            waveform, sample_rate, pretrained.samplerate
+        )
+    # Demucs expects stereo; duplicate mono if necessary.
+    if waveform.shape[0] == 1 and pretrained.audio_channels == 2:
+        waveform = waveform.repeat(2, 1)
+
+    # apply_model wants (batch, channels, time).
+    with torch.no_grad():
+        sources = apply_model(
+            pretrained,
+            waveform[None],
+            shifts=1,
+            split=True,
+            overlap=0.25,
+            progress=False,
+        )[0]
+    # `sources` is (n_sources, channels, time); `pretrained.sources` is the
+    # ordered list of stem names.
 
     output_dir.mkdir(parents=True, exist_ok=True)
     paths: dict[str, Path] = {}
-    for stem_name, tensor in sources.items():
+    for stem_name, tensor in zip(pretrained.sources, sources, strict=True):
         out_path = output_dir / f"{stem_name}.wav"
-        # torchaudio.save expects (channels, time); demucs returns the same.
-        torchaudio.save(str(out_path), tensor.cpu(), separator.samplerate)
+        # soundfile.write expects (frames, channels) float; tensor is
+        # (channels, frames). Transpose and convert.
+        sf.write(str(out_path), tensor.cpu().numpy().T, pretrained.samplerate)
         paths[stem_name] = out_path
     return paths
 

@@ -1,10 +1,10 @@
 """Command-line interface for StemGuessr.
 
-Composes the Spotify ingest, preview-source, separation, and manifest modules
-into a single ``stemguessr ingest <playlist_url>`` command. The command is
-intentionally one big procedural function: each stage is short, the data flow
-is linear, and per-track failures are reported and skipped rather than
-aborting the whole run.
+Composes the Spotify ingest, preview-download, separation, and manifest
+modules into a single ``stemguessr ingest <playlist_url>`` command. The
+command is intentionally one big procedural function: each stage is short,
+the data flow is linear, and per-track failures are reported and skipped
+rather than aborting the whole run.
 
 Public entry points:
 
@@ -33,19 +33,19 @@ from stemguessr.manifest import (
     build_manifest,
 )
 from stemguessr.separate import MODEL_STEMS, separate
-from stemguessr.sources import get_preview
+from stemguessr.sources import download_preview
 from stemguessr.spotify import (
     SpotifyError,
     Track,
     fetch_playlist_tracks,
-    get_client,
     parse_playlist_id,
 )
 
 app = typer.Typer(
     name="stemguessr",
     help=(
-        "Ingest a Spotify playlist into Demucs-separated stems for the StemGuessr game."
+        "Ingest a public Spotify playlist into Demucs-separated stems for "
+        "the StemGuessr game. No authentication required."
     ),
     no_args_is_help=True,
     add_completion=False,
@@ -90,11 +90,11 @@ def _model_for_stems(n_stems: int) -> str:
     raise ValueError(f"--stems must be 4 or 6 (got {n_stems})")
 
 
-def _clear_track_cache(track_isrc: str, cache_dir: Path) -> None:
-    """Remove the cached preview and stem outputs for a single ISRC."""
+def _clear_track_cache(track_id: str, cache_dir: Path) -> None:
+    """Remove the cached preview and stem outputs for a single track ID."""
     for ext in ("m4a", "mp3"):
-        (cache_dir / "previews" / f"{track_isrc}.{ext}").unlink(missing_ok=True)
-    stems_dir = cache_dir / "stems" / track_isrc
+        (cache_dir / "previews" / f"{track_id}.{ext}").unlink(missing_ok=True)
+    stems_dir = cache_dir / "stems" / track_id
     if stems_dir.exists():
         shutil.rmtree(stems_dir)
 
@@ -105,31 +105,27 @@ def _process_track(
     model: str,
     force_refresh: bool,
 ) -> TrackBuildEntry | None:
-    """Run the per-track pipeline: optional cache clear → preview → separation.
+    """Run the per-track pipeline: optional cache clear → preview download →
+    separation.
 
     Returns a :class:`TrackBuildEntry` on success, or ``None`` if the track
-    must be skipped (no ISRC; no source has a preview). Side effects: writes
+    must be skipped (no preview URL from Spotify). Side effects: writes
     files into ``cache_dir``.
     """
-    if not track.isrc:
+    if not track.preview_url:
         typer.echo(
-            f"  skip: no ISRC for {track.title!r} — {', '.join(track.artists)}",
+            f"  skip: no preview from Spotify for {track.title!r} — "
+            f"{', '.join(track.artists)}",
             err=True,
         )
         return None
 
+    track_id = track.spotify_id
     if force_refresh:
-        _clear_track_cache(track.isrc, cache_dir)
+        _clear_track_cache(track_id, cache_dir)
 
-    preview_path = get_preview(track.isrc, cache_dir)
-    if preview_path is None:
-        typer.echo(
-            f"  skip: no preview source has ISRC {track.isrc} ({track.title!r})",
-            err=True,
-        )
-        return None
-
-    stem_dir = cache_dir / "stems" / track.isrc
+    preview_path = download_preview(track.preview_url, track_id, cache_dir)
+    stem_dir = cache_dir / "stems" / track_id
     stem_paths = separate(preview_path, stem_dir, model=model)
     return TrackBuildEntry(track=track, stem_paths=stem_paths)
 
@@ -140,7 +136,7 @@ def ingest(
         str,
         typer.Argument(
             help=(
-                "Spotify playlist URL or URI: open.spotify.com/playlist/<id>, "
+                "Public Spotify playlist URL or URI: open.spotify.com/playlist/<id>, "
                 "intl-XX/playlist/<id>, or spotify:playlist:<id>."
             ),
         ),
@@ -170,6 +166,17 @@ def ingest(
             ),
         ),
     ] = False,
+    limit: Annotated[
+        int | None,
+        typer.Option(
+            "--limit",
+            "-n",
+            help=(
+                "Process only the first N tracks of the playlist "
+                "(useful for quick smoke tests)."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Ingest a Spotify playlist into stems and build the game manifest."""
     try:
@@ -186,13 +193,16 @@ def ingest(
 
     typer.echo(f"Fetching tracks for playlist {playlist_id}...")
     try:
-        client = get_client()
+        tracks = fetch_playlist_tracks(playlist_url)
     except SpotifyError as e:
         typer.echo(f"error: {e}", err=True)
         raise typer.Exit(1) from e
 
-    tracks = fetch_playlist_tracks(client, playlist_id)
-    typer.echo(f"  {len(tracks)} tracks found.")
+    if limit is not None:
+        tracks = tracks[:limit]
+        typer.echo(f"  {len(tracks)} tracks (limited from playlist by --limit).")
+    else:
+        typer.echo(f"  {len(tracks)} tracks found.")
 
     entries: list[TrackBuildEntry] = []
     for i, track in enumerate(tracks, start=1):

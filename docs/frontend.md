@@ -27,41 +27,105 @@ python -m http.server 8000
 # open http://localhost:8000/
 ```
 
-## Game state machine
+## Game flow
+
+The full state machine, including the per-round branches the player drives:
 
 ```
-       fetch manifest.json
-               │
-               ▼
-        ┌──────────────┐
-        │   LOADING    │
-        └──────┬───────┘
-               │  manifest received & schema-checked
-               ▼
-        ┌──────────────┐    next track
-        │ TRACK_LOAD   │ ◄────────────────┐
-        └──────┬───────┘                  │
-               │  all stem buffers decoded│
-               ▼                          │
-        ┌──────────────┐                  │
-        │ ROUND k      │ play / pause     │
-        │ (stems[0..k])│ submit guess     │
-        └──────┬───────┘ skip             │
-               │                          │
-               ├─ correct ─►  REVEAL ─────┤
-               │                          │
-               └─ wrong / skip ─►  k+1    │
-                          │               │
-                          └─ k = N ─► REVEAL (no win)
+[ Page load ]
+       │
+       ▼
+   fetch manifest.json
+       │
+       ▼
+   schema.version == 1 ? ──── no ──→  ERROR (status line, halt)
+       │
+      yes
+       ▼
+   shuffle tracks  (Fisher–Yates, in place)
+       │
+       ▼
+┌──────────────────────────────────────────────────────────────┐
+│ TRACK_LOAD     current = trackOrder[i]                       │
+│                round ← 0;  guess list cleared                │
+│                fetch + decode an AudioBuffer for every stem  │
+└──────────────────────┬───────────────────────────────────────┘
+                       │
+                       ▼
+┌──────────────────────────────────────────────────────────────┐
+│ ROUND k        0 ≤ k < N  where N = manifest.stems.length    │
+│                active stems = stems[0..k]   (cumulative)     │
+│                                                              │
+│   Controls available to the player:                          │
+│     ▶/■   Play / pause synchronised stem playback            │
+│     vol   Master gain slider (0 .. 0.25, default 0.1)        │
+│     ⏎    Submit typed guess                                  │
+│     skip  Skip this round                                    │
+└──────────────────────┬───────────────────────────────────────┘
+                       │
+        ┌──────────────┼──────────────────┬─────────────────────┐
+        │              │                  │                     │
+   correct guess   wrong guess          skip                    │
+   (title match)                                                │
+        │              │                  │                     │
+        ▼              ▼                  ▼                     │
+   stop playback  stop playback      stop playback              │
+   append to list append to list     append "— skipped —"       │
+     (.correct)                       (.skipped)                │
+        │              │                  │                     │
+        │           k ← k + 1         k ← k + 1                 │
+        │              │                  │                     │
+        │       ┌──────┴──────┐    ┌──────┴──────┐              │
+        │       │             │    │             │              │
+        │     k < N         k = N  k < N       k = N            │
+        │       │             │    │             │              │
+        │       └─ ROUND k ─┐ │    └─ ROUND k ─┐ │              │
+        │                   │ │                │ │              │
+        ▼                   ▼ ▼                ▼ ▼              │
+┌──────────────────────────────────────────────────────────────┐│
+│ REVEAL                                                       ││
+│   show track.title  +  track.artists.join(", ")              ││
+│   show outcome:                                              ││
+│     "solved on round (k+1) of N"   (won path)                ││
+│     "no win — out of guesses"      (k = N path)              ││
+│   disable guess input + skip                                 ││
+│   re-enable play (allow re-listen)                           ││
+│   show  Next track →                                         ││
+└──────────────────────┬───────────────────────────────────────┘│
+                       │                                         │
+                       ▼                                         │
+                  i ← i + 1                                      │
+                       │                                         │
+              ┌────────┴────────┐                                │
+              │                 │                                │
+        i < tracks.length    i = tracks.length                   │
+              │                 │                                │
+              └─ TRACK_LOAD ────┘                                │
+                       │
+                       ▼
+              PLAYLIST_COMPLETE
+              (status line "🎉 Playlist complete.";
+               all interactive controls disabled)
 ```
 
-The whole state lives in the `state` object at the top of `game.js`; the rest of the file is functions that read or mutate it. There is no two-way data binding and no re-render loop — the DOM is updated imperatively at the few transition points that need it.
+Runtime state lives in the single `state` object at the top of `game.js`; the rest of the file is functions that read and mutate it. There is no two-way data binding and no re-render loop — the DOM is updated imperatively at the few transition points that need it.
 
 ## Audio pipeline
 
 The frontend uses the **Web Audio API**. On track load, every stem WAV is fetched and decoded into an [`AudioBuffer`](https://developer.mozilla.org/en-US/docs/Web/API/AudioBuffer); buffers are cached by URL across the session so `--force-refresh`-induced re-fetches are the only repeat downloads.
 
-Per round, `play()` creates one [`AudioBufferSourceNode`](https://developer.mozilla.org/en-US/docs/Web/API/AudioBufferSourceNode) per active stem, all started at the same `audioCtx.currentTime`. Because Demucs preserves the input clip's timing exactly, the stems are sample-aligned: starting them simultaneously reconstitutes the mixture. Polyphony is handled by the AudioContext's destination summing graph; we do nothing else.
+Per round, `play()` creates one [`AudioBufferSourceNode`](https://developer.mozilla.org/en-US/docs/Web/API/AudioBufferSourceNode) per active stem, all started at the same `audioCtx.currentTime`. Because Demucs preserves the input clip's timing exactly, the stems are sample-aligned: starting them simultaneously reconstitutes the mixture.
+
+A single master [`GainNode`](https://developer.mozilla.org/en-US/docs/Web/API/GainNode) sits between every source and `audioCtx.destination`, driven by the volume slider:
+
+```
+source₁ ┐
+source₂ ├──►  masterGain  ──►  audioCtx.destination
+source₃ ┤      (0 .. 0.25,
+source₄ ┘       default 0.1)
+```
+
+The reason for the deliberately low default and capped maximum: stems are summed (not averaged) at the destination, and the unmixed sum of four sources can exceed unity gain by a wide margin, especially after Demucs's reconstruction. Capping at 0.25 keeps even the noisiest mix below clipping and the default at 0.1 protects unsuspecting listeners with headphones.
 
 When the user clicks pause (or the clip ends), every active source is `stop()`-ped and discarded. AudioBufferSourceNodes are single-use by design — `play()` re-creates them.
 

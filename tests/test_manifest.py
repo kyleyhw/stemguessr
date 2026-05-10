@@ -24,6 +24,7 @@ def _make_track(spotify_id: str = "abc123", isrc: str | None = "USABC1234567") -
         title="Test Song",
         artists=("Artist One", "Artist Two"),
         duration_ms=200_000,
+        preview_url="https://p.scdn.co/mp3-preview/example",
     )
 
 
@@ -147,7 +148,10 @@ class TestErrors:
         # Only 1 of 4 expected stems present
         stems = ("drums", "bass", "vocals", "other")
         partial = _make_stem_files(tmp_path / "stems" / "ID", ("drums",))
-        entry = TrackBuildEntry(track=_make_track(), stem_paths=partial)
+        entry = TrackBuildEntry(
+            track=_make_track(spotify_id="abc"),
+            stem_paths=partial,
+        )
 
         with pytest.raises(ManifestError, match="missing stems"):
             build_manifest(

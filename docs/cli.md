@@ -5,55 +5,50 @@ This document describes the command-line interface implemented in [`src/stemgues
 ## Synopsis
 
 ```
-stemguessr ingest <playlist_url> [--out PATH] [--stems {4,6}] [--force-refresh]
+stemguessr ingest <playlist_url> [--out PATH] [--stems {4,6}] [--force-refresh] [--limit N]
+stemguessr --version
 ```
 
 `stemguessr` is registered as a console script in `pyproject.toml`. After `uv sync` (or `pip install`), it is on the `PATH`.
 
+**No authentication is required.** Public playlist data and 30-second preview URLs come from Spotify's public embed page; see [`spotify.md`](spotify.md) for details.
+
 ## What `ingest` does
 
 ```
-Spotify playlist URL
+Public Spotify playlist URL
         │
         ▼
-[ parse_playlist_id ]            (Phase 2 — pure function)
+[ parse_playlist_id ]            (pure function)
         │
         ▼
-[ Spotify Web API ]              (Phase 2 — needs SPOTIFY_CLIENT_ID/SECRET)
+[ Spotify embed page ]           (no auth; parses __NEXT_DATA__ JSON)
         │
-        ▼
-   for each track:
-        ├── skip if no ISRC
+        ▼  list of Track(spotify_id, title, artists, duration_ms, preview_url)
+   for each track (optionally capped by --limit):
+        ├── skip if no preview_url from Spotify
         ├── (optional) clear cached preview/stems if --force-refresh
-        ├── get_preview(isrc) →   (Phase 3 — iTunes / Deezer)
-        │       skip if both miss
-        └── separate(preview)  →  (Phase 4 — Demucs)
+        ├── download_preview(url, spotify_id, cache_dir)   → cached MP3
+        └── separate(preview)                              → stems/<id>/*.wav
         ▼
-[ build_manifest(entries) ]      (Phase 5)
-        │
-        ▼
-   manifest.json + stems/<id>/*.wav under --out
+[ build_manifest(entries) ]      → cache/manifest.json
 ```
 
-The whole pipeline is a single linear function; per-track failures (no ISRC, no preview source has it) are reported on stderr and skipped without aborting the run.
+The whole pipeline is a single linear function; per-track failures (Spotify did not provide a preview URL) are reported on stderr and skipped without aborting the run.
 
 ## Arguments
 
 | Name | Type | Required | Default | Description |
 |------|------|----------|---------|-------------|
-| `playlist_url` | string | yes | — | Any of the URL/URI forms parsed by [`parse_playlist_id`](spotify.md#playlist-url-parsing). |
+| `playlist_url` | string | yes | — | Any of the URL/URI/bare-ID forms parsed by [`parse_playlist_id`](spotify.md#public-api). |
 | `--out` / `-o` | path | no | `./cache` | Cache root — receives `previews/`, `stems/`, `manifest.json`. Created if missing. |
 | `--stems` | int | no | `4` | `4` (htdemucs) or `6` (htdemucs_6s). Any other value → exit code 1. |
 | `--force-refresh` | bool | no | `false` | Delete cached preview and stem files for **every** track in the playlist before re-processing. |
+| `--limit` / `-n` | int | no | _none_ | Process only the first N tracks. Useful for quick smoke tests against large playlists. |
 
-## Required environment variables
+## Environment variables
 
-```bash
-export SPOTIFY_CLIENT_ID="..."
-export SPOTIFY_CLIENT_SECRET="..."
-```
-
-The Client Credentials flow is sufficient for any *public* playlist. Register an application at <https://developer.spotify.com/dashboard>.
+None required. Earlier versions used the Spotify Web API's Client Credentials flow with `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET`; the embed-based path in v0.1.1 onwards needs no credentials at all.
 
 ## Output layout
 
@@ -79,7 +74,7 @@ The frontend (Phase 7) is configured to serve `cache/` as its static root, so th
 | Code | Cause |
 |------|-------|
 | `0` | Successful ingest. Manifest written. |
-| `1` | Bad input: invalid `--stems`, unparseable playlist URL, or missing Spotify credentials. |
+| `1` | Bad input: invalid `--stems`, unparseable playlist URL, or playlist embed page unreachable / private. |
 | `≥ 2` | Unexpected exception (network failure that survived retries, Demucs crash, disk full). The traceback is propagated unmodified. |
 
 A run with one or more skipped tracks (no ISRC, no preview source) still exits `0`. The skip is a normal data outcome, not an error.
@@ -101,6 +96,9 @@ Re-running is therefore essentially free, and is the recommended way to rebuild 
 ```bash
 # Default: 4 stems, cache in ./cache.
 stemguessr ingest "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M"
+
+# Quick smoke test — first 3 tracks only.
+stemguessr ingest "https://open.spotify.com/playlist/..." --limit 3
 
 # 6-stem mode (separates guitar/piano from "other").
 stemguessr ingest \

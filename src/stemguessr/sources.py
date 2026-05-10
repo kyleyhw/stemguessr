@@ -202,7 +202,63 @@ def _download(client: httpx.Client, url: str, dest: Path) -> None:
     tmp.replace(dest)
 
 
-# --- Top-level public API ---
+# --- Direct preview download (for sources that already give us the URL) ---
+
+
+def download_preview(
+    url: str,
+    cache_key: str,
+    cache_dir: Path,
+    *,
+    extension: str = "mp3",
+    client: httpx.Client | None = None,
+) -> Path:
+    """Download a preview from a known URL into the cache and return its path.
+
+    Used when the upstream metadata source (e.g., Spotify's embed page)
+    already provides a direct preview URL, so no ISRC-based lookup is needed.
+
+    Cache layout: ``{cache_dir}/previews/{cache_key}.{extension}``.
+    Idempotent: returns the existing path on cache hit without any network
+    activity.
+
+    Args:
+        url: Direct URL to a 30-second preview file.
+        cache_key: Stable identifier for the cached file (e.g., Spotify
+            track ID). Determines the on-disk filename stem.
+        cache_dir: Root cache directory; the ``previews/`` subdirectory is
+            created on demand.
+        extension: File extension (no leading dot). Default ``"mp3"`` matches
+            the format Spotify's CDN serves.
+        client: Optional pre-built ``httpx.Client``.
+
+    Returns:
+        Path to the cached preview file.
+
+    Raises:
+        httpx.HTTPStatusError: Download failed and retries are exhausted.
+    """
+    previews_dir = cache_dir / "previews"
+    dest = previews_dir / f"{cache_key}.{extension}"
+    if dest.exists():
+        return dest
+
+    owns_client = client is None
+    if client is None:
+        client = httpx.Client(
+            timeout=DEFAULT_TIMEOUT,
+            headers={"User-Agent": USER_AGENT},
+            follow_redirects=True,
+        )
+    try:
+        _download(client, url, dest)
+        return dest
+    finally:
+        if owns_client:
+            client.close()
+
+
+# --- ISRC-based lookup pipeline (alternative path, retained for fallback) ---
 
 
 def get_preview(

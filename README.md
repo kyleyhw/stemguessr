@@ -4,7 +4,7 @@ A music-guessing game in the Bandle / Heardle family, built around source-separa
 
 ## Status
 
-**v0.1.0 alpha released — 2026-05-10.** Full vertical slice from Spotify URL to playable game; 72 unit tests, all offline. See [`CHANGELOG.md`](CHANGELOG.md) for the release notes and [`PROJECT_PLAN.md`](PROJECT_PLAN.md) for the phased build log. End-to-end testing against a live Spotify playlist is the immediate next step (held off in this release because it needs API credentials).
+**v0.1.1 — 2026-05-10.** End-to-end verified: no Spotify credentials required, ingests a public playlist URL via the embed page, full Demucs separation, browser game with volume control. See [`CHANGELOG.md`](CHANGELOG.md) for the release log and [`PROJECT_PLAN.md`](PROJECT_PLAN.md) for the phased build log.
 
 ## System architecture
 
@@ -119,7 +119,7 @@ stemguessr/
 
 ## Quickstart
 
-End-to-end: clone, install, ingest a Spotify playlist, copy the static frontend assets next to the cache, and serve.
+End-to-end: clone, install, ingest a public playlist, copy the static frontend assets next to the cache, and serve. **No Spotify credentials are required** — playlist data and preview URLs come from Spotify's public embed page.
 
 ```bash
 # 1. Clone and install (Python 3.12+ required; uv will fetch if missing)
@@ -127,21 +127,21 @@ git clone https://github.com/kyleyhw/stemguessr.git
 cd stemguessr
 uv sync
 
-# 2. Set Spotify Client Credentials. Register at developer.spotify.com/dashboard.
-export SPOTIFY_CLIENT_ID="..."
-export SPOTIFY_CLIENT_SECRET="..."
+# 2. Ingest a public playlist. The first run downloads ~250 MB of Demucs
+#    weights and runs CPU separation (~5-15 s per 30 s clip on CPU); later
+#    runs over the same playlist are essentially instant (cache hit). Use
+#    --limit N for a quick smoke test against a large playlist.
+uv run stemguessr ingest \
+    "https://open.spotify.com/playlist/<id>" \
+    --out ./cache \
+    --limit 5
 
-# 3. Ingest a public playlist. The first run downloads ~250 MB of Demucs
-#    weights and runs CPU separation; later runs over the same playlist
-#    are essentially instant (cache hit).
-uv run stemguessr ingest "https://open.spotify.com/playlist/<id>" --out ./cache
-
-# 4. Copy frontend assets next to the manifest and serve.
+# 3. Copy frontend assets next to the manifest and serve.
 cp web/index.html web/styles.css web/game.js ./cache/
 cd ./cache
 python -m http.server 8000
 
-# 5. Open http://localhost:8000/ in a Chromium-based browser.
+# 4. Open http://localhost:8000/ in a Chromium-based browser.
 ```
 
 ## Development
