@@ -36,17 +36,27 @@ class TestModelStems:
     """Sanity-check the stem catalogue against external expectations."""
 
     def test_htdemucs_4_stems(self) -> None:
-        assert MODEL_STEMS["htdemucs"] == ("drums", "bass", "vocals", "other")
+        # Game-reveal order: vocals last so the lyrics aren't the first
+        # thing the player hears.
+        assert MODEL_STEMS["htdemucs"] == ("drums", "bass", "other", "vocals")
 
     def test_htdemucs_6s_extends_to_guitar_piano(self) -> None:
+        # Same vocals-last principle; harmonic content (other, guitar, piano)
+        # sits between rhythm and vocals.
         assert MODEL_STEMS["htdemucs_6s"] == (
             "drums",
             "bass",
-            "vocals",
             "other",
             "guitar",
             "piano",
+            "vocals",
         )
+
+    def test_vocals_is_always_last(self) -> None:
+        for model, stems in MODEL_STEMS.items():
+            assert stems[-1] == "vocals", (
+                f"model {model!r} must put vocals last (got {stems[-1]!r})"
+            )
 
 
 class TestSeparate:

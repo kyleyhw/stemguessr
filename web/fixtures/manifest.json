@@ -8,7 +8,7 @@
         "url": "https://open.spotify.com/playlist/FIXTURE_PLAYLIST_ID"
     },
     "model": "htdemucs",
-    "stems": ["drums", "bass", "vocals", "other"],
+    "stems": ["drums", "bass", "other", "vocals"],
     "tracks": [
         {
             "id": "FIXTURE_TRACK_001",

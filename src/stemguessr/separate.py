@@ -16,12 +16,19 @@ from __future__ import annotations
 
 from pathlib import Path
 
-# Stem-name tuples per model variant. The 4-stem htdemucs splits the mixture
-# into the four canonical sources of popular music; htdemucs_6s additionally
-# separates guitar and piano from the residual "other" stem.
+# Stem-name tuples per model variant, in **game-reveal order**. The 4-stem
+# htdemucs splits the mixture into the four canonical sources of popular
+# music; htdemucs_6s additionally separates guitar and piano from the
+# residual "other" stem.
+#
+# Vocals are placed last because the lyrics + identifiable singer make them
+# the easiest stem to identify a song from; revealing them first would
+# trivialise the guessing loop. The ordering progresses from rhythm-only
+# (drums, bass) through harmonic content (other; plus guitar and piano in
+# the 6-stem variant) to vocals.
 MODEL_STEMS: dict[str, tuple[str, ...]] = {
-    "htdemucs": ("drums", "bass", "vocals", "other"),
-    "htdemucs_6s": ("drums", "bass", "vocals", "other", "guitar", "piano"),
+    "htdemucs": ("drums", "bass", "other", "vocals"),
+    "htdemucs_6s": ("drums", "bass", "other", "guitar", "piano", "vocals"),
 }
 
 
