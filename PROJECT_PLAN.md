@@ -1,6 +1,6 @@
 # StemGuessr Project Development Plan
 
-This document outlines the planned phases and tasks for developing **StemGuessr** — a Bandle-style music-guessing game built around source-separated stems from a Spotify public playlist URL.
+This document outlines the planned phases and tasks for developing **StemGuessr** — a music-guessing game built around source-separated stems from a Spotify public playlist URL.
 
 Status tags: `[completed]`, `[in-progress]`, `[pending]`. Updated live as work progresses.
 

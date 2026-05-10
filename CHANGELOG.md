@@ -4,6 +4,22 @@ All notable changes to StemGuessr are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] — 2026-05-10
+
+Progressive ingest: the frontend can start playing as soon as the first track is separated, and picks up subsequent tracks as Demucs finishes them.
+
+### Added
+
+- **Progressive manifest writes.** `stemguessr ingest` now rewrites `manifest.json` after every successful track separation (atomically, via temp + rename), with `complete: false` and `expected_tracks: <total>` fields so a polling consumer knows ingest is still in progress.
+- **Frontend polling.** The browser game polls `manifest.json` every 2 s while `complete: false`. New tracks (by `id`) are appended to the playable list without disturbing the existing shuffle order. If the player has already finished every track that was available and a new track arrives, the game advances into it automatically. Polling stops once `complete: true` is observed.
+- **`finally`-guarded final write.** Even on `KeyboardInterrupt`, the CLI writes a final manifest with `complete: true`, so the frontend stops polling and treats the partial result as the final playlist.
+
+### Changed
+
+- Manifest schema (still version 1, backward-compatible) gains two optional fields: `complete: bool` and `expected_tracks: int`. Older readers that ignore unknown fields still work.
+- Frontend status line shows `Track i/N · ingesting M/Y` while ingest is in progress, where `M` is the number of tracks already separated and `Y` is `expected_tracks`.
+- Frontend repository description and all in-repo references no longer mention "Bandle" — the project has settled on its own identity.
+
 ## [0.1.1] — 2026-05-10
 
 End-to-end UI verification, no-auth ingest, volume control. The pipeline now runs against a public Spotify playlist URL with **zero credentials configured**, and was exercised end-to-end against `Top 50 - Global` (limited to 2 tracks for the verification run).

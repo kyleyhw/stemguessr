@@ -1,10 +1,10 @@
 # StemGuessr
 
-A music-guessing game in the Bandle / Heardle family, built around source-separated stems. Given any *public* Spotify playlist URL, the ingest pipeline parses Spotify's own embed page for the playlist (no auth required), downloads each track's 30-second preview from Spotify's CDN, separates the clip into instrument stems with Demucs, and serves the stems to a static browser frontend that reveals one stem per round of guessing.
+A music-guessing game built around source-separated stems. Given any *public* Spotify playlist URL, the ingest pipeline parses Spotify's own embed page for the playlist (no auth required), downloads each track's 30-second preview from Spotify's CDN, separates the clip into instrument stems with Demucs, and serves the stems to a static browser frontend that reveals one stem per round of guessing.
 
 ## Status
 
-**v0.1.1 — 2026-05-10.** End-to-end verified: no Spotify credentials required, ingests a public playlist URL via the embed page, full Demucs separation, browser game with volume control. See [`CHANGELOG.md`](CHANGELOG.md) for the release log and [`PROJECT_PLAN.md`](PROJECT_PLAN.md) for the phased build log.
+**v0.1.2 — 2026-05-10.** Progressive ingest: the browser starts playing as soon as the first track is separated, and the rest stream in as Demucs finishes them. No Spotify credentials required; full Demucs separation; volume control. See [`CHANGELOG.md`](CHANGELOG.md) for the release log and [`PROJECT_PLAN.md`](PROJECT_PLAN.md) for the phased build log.
 
 ## System architecture
 

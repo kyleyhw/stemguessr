@@ -46,12 +46,14 @@ The top-level `version` field is checked by the frontend on load. Future schema-
 | Field | Type | Description |
 |-------|------|-------------|
 | `version` | int | Schema version. Always `1` at present. |
-| `generated_at` | string | ISO 8601 timestamp with explicit UTC offset (`+00:00`). The build time of *this* manifest, not the playlist's creation time. |
+| `generated_at` | string | ISO 8601 timestamp with explicit UTC offset (`+00:00`). The build time of *this* manifest, rewritten on every progressive update during ingest. |
+| `complete` | bool | `true` when the ingest run that produced this manifest has finished (whether by success, interrupt, or any other exit). The frontend polls while `false` and stops once it sees `true`. |
+| `expected_tracks` | int (optional) | How many tracks the run is processing in total (after `--limit`). Lets the frontend show "M / N ready" progress while `complete: false`. Omitted if not known by the writer. |
 | `source_playlist.spotify_id` | string | The 22-char Spotify playlist ID. |
 | `source_playlist.url` | string | The original URL/URI the user supplied to the CLI. Preserved verbatim for traceability. |
 | `model` | string | `"htdemucs"` or `"htdemucs_6s"`. The frontend uses this to label which stem set was used. |
 | `stems` | array&lt;string&gt; | The stem names used for *all* tracks in this manifest, **in the order rounds should be revealed**. The frontend should not re-order. |
-| `tracks` | array&lt;Track&gt; | Per-track entries; see below. Order matches the playlist's track order modulo skipped (preview-less) tracks. |
+| `tracks` | array&lt;Track&gt; | Per-track entries; see below. Order matches the playlist's track order modulo skipped (preview-less) tracks. **Grows monotonically** during a progressive ingest — entries already present at one poll are guaranteed to remain at the same index in subsequent polls. |
 
 ### Track entry
 
@@ -97,6 +99,10 @@ The builder enforces two invariants:
 2. **Every stem path must be located under `output_dir`.** The path is converted via `Path.resolve().relative_to(output_dir.resolve())` to a POSIX URL; an attempt to reference a file outside the cache root raises `ManifestError`.
 
 Violations raise `ManifestError`; the CLI may catch and skip, or abort, at its discretion.
+
+## Atomic writes
+
+The builder writes the manifest via a temp file (`manifest.json.tmp`) followed by `Path.replace`, which is atomic on the same filesystem. This matters because the CLI rewrites the manifest after every successfully-separated track during a progressive ingest, and the frontend polls the file at 2-second intervals — without an atomic swap, a poll could observe a half-written file and fail JSON parsing.
 
 ## Testing
 

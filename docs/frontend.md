@@ -71,6 +71,17 @@ flowchart TD
 
 Runtime state lives in the single `state` object at the top of `game.js`; the rest of the file is functions that read and mutate it. There is no two-way data binding and no re-render loop — the DOM is updated imperatively at the few transition points that need it.
 
+### Progressive ingest
+
+When the CLI is still ingesting (`manifest.complete === false`), the frontend polls `manifest.json` every **2 seconds** until `complete` flips to `true`. New tracks (identified by `id`) are appended to `state.trackOrder` *in playlist order*, without reshuffling the tracks already there — the player's shuffle is preserved.
+
+Two transition cases that the polling handles explicitly:
+
+1. **Empty start.** Initial fetch sees `tracks: []` with `complete: false`. Status reads "Waiting for first track to be separated…", controls are disabled. As soon as the first track lands and the next poll picks it up, the frontend triggers `loadCurrentTrack()` automatically.
+2. **Ran out, then rescued.** Player has finished every track that was available and the UI shows "🎉 Playlist complete." (or its waiting equivalent). A subsequent poll appends a new track. Because `state.currentIndex` was at the end and is now back inside the array, the frontend re-triggers `loadCurrentTrack()` and the game continues seamlessly.
+
+While polling, the status line reads `Track i/N · ingesting M/Y`, where `M` is the count of fully-separated tracks and `Y` is `expected_tracks` from the manifest.
+
 ## Audio pipeline
 
 The frontend uses the **Web Audio API**. On track load, every stem WAV is fetched and decoded into an [`AudioBuffer`](https://developer.mozilla.org/en-US/docs/Web/API/AudioBuffer); buffers are cached by URL across the session so `--force-refresh`-induced re-fetches are the only repeat downloads.
@@ -131,7 +142,7 @@ lowercase
 → collapse whitespace and trim
 ```
 
-Equality of the normalised forms means correct. This handles the most common Bandle frustrations (case, accents, "(Remix)" suffixes, punctuation) without going as far as Levenshtein, which would let typos through. A future enhancement could allow opt-in fuzzy matching with an explicit threshold.
+Equality of the normalised forms means correct. This handles the most common case-insensitive / accent / parenthetical / punctuation differences without going as far as Levenshtein, which would let typos through. A future enhancement could allow opt-in fuzzy matching with an explicit threshold.
 
 Artist match is intentionally not required. Many guessing games conflate *naming the song* with *naming the song and its artist*, which makes guessing artificially harder when the player is right but typed only the title.
 

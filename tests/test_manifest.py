@@ -220,3 +220,60 @@ class TestOrderingAndMultiple:
         data = json.loads(manifest_path.read_text(encoding="utf-8"))
         assert data["tracks"] == []
         assert data["version"] == MANIFEST_VERSION
+
+
+class TestProgressiveFields:
+    """The ``complete`` and ``expected_tracks`` fields drive the frontend's
+    polling behaviour — see docs/manifest.md.
+    """
+
+    def test_complete_defaults_to_true(self, tmp_path: Path) -> None:
+        path = build_manifest(
+            playlist_id="p",
+            playlist_url="u",
+            model="htdemucs",
+            stems=("drums",),
+            entries=[],
+            output_dir=tmp_path,
+        )
+        data = json.loads(path.read_text(encoding="utf-8"))
+        assert data["complete"] is True
+
+    def test_complete_false_during_ingest(self, tmp_path: Path) -> None:
+        path = build_manifest(
+            playlist_id="p",
+            playlist_url="u",
+            model="htdemucs",
+            stems=("drums",),
+            entries=[],
+            output_dir=tmp_path,
+            complete=False,
+            expected_tracks=10,
+        )
+        data = json.loads(path.read_text(encoding="utf-8"))
+        assert data["complete"] is False
+        assert data["expected_tracks"] == 10
+
+    def test_expected_tracks_omitted_when_none(self, tmp_path: Path) -> None:
+        path = build_manifest(
+            playlist_id="p",
+            playlist_url="u",
+            model="htdemucs",
+            stems=("drums",),
+            entries=[],
+            output_dir=tmp_path,
+        )
+        data = json.loads(path.read_text(encoding="utf-8"))
+        assert "expected_tracks" not in data
+
+    def test_atomic_write_no_tmp_left_behind(self, tmp_path: Path) -> None:
+        build_manifest(
+            playlist_id="p",
+            playlist_url="u",
+            model="htdemucs",
+            stems=("drums",),
+            entries=[],
+            output_dir=tmp_path,
+        )
+        assert not (tmp_path / "manifest.json.tmp").exists()
+        assert (tmp_path / "manifest.json").exists()

@@ -204,25 +204,44 @@ def ingest(
     else:
         typer.echo(f"  {len(tracks)} tracks found.")
 
+    expected = len(tracks)
     entries: list[TrackBuildEntry] = []
-    for i, track in enumerate(tracks, start=1):
-        typer.echo(f"[{i}/{len(tracks)}] {track.title!r} — {', '.join(track.artists)}")
-        entry = _process_track(track, out, model, force_refresh)
-        if entry is not None:
-            entries.append(entry)
 
-    typer.echo(
-        f"\nBuilding manifest: {len(entries)}/{len(tracks)} tracks have stems..."
-    )
-    manifest_path = build_manifest(
-        playlist_id=playlist_id,
-        playlist_url=playlist_url,
-        model=model,
-        stems=MODEL_STEMS[model],
-        entries=entries,
-        output_dir=out,
-    )
-    typer.echo(f"Done. Manifest at {manifest_path}")
+    def _write_manifest(*, complete: bool) -> Path:
+        return build_manifest(
+            playlist_id=playlist_id,
+            playlist_url=playlist_url,
+            model=model,
+            stems=MODEL_STEMS[model],
+            entries=entries,
+            output_dir=out,
+            complete=complete,
+            expected_tracks=expected,
+        )
+
+    # Initial empty manifest so a frontend that's already polling sees the
+    # ingest in progress (complete=false, tracks=[]).
+    _write_manifest(complete=False)
+
+    try:
+        for i, track in enumerate(tracks, start=1):
+            typer.echo(
+                f"[{i}/{len(tracks)}] {track.title!r} — {', '.join(track.artists)}"
+            )
+            entry = _process_track(track, out, model, force_refresh)
+            if entry is not None:
+                entries.append(entry)
+                # Incremental write: the frontend can pick up this track on
+                # its next poll and start playing immediately.
+                _write_manifest(complete=False)
+    finally:
+        # Always finalise — even on KeyboardInterrupt — so the frontend stops
+        # polling and treats the partial result as the final playlist.
+        manifest_path = _write_manifest(complete=True)
+        typer.echo(
+            f"\nDone. {len(entries)}/{expected} tracks have stems. "
+            f"Manifest at {manifest_path}"
+        )
 
 
 def main() -> None:

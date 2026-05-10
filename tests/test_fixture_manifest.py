@@ -30,12 +30,17 @@ def test_top_level_fields_present(fixture_data: dict) -> None:
     for required in (
         "version",
         "generated_at",
+        "complete",
         "source_playlist",
         "model",
         "stems",
         "tracks",
     ):
         assert required in fixture_data, f"missing top-level field: {required!r}"
+
+
+def test_complete_is_bool(fixture_data: dict) -> None:
+    assert isinstance(fixture_data["complete"], bool)
 
 
 def test_version_is_one(fixture_data: dict) -> None:

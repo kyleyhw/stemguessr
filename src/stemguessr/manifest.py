@@ -51,6 +51,8 @@ def build_manifest(
     stems: tuple[str, ...],
     entries: list[TrackBuildEntry],
     output_dir: Path,
+    complete: bool = True,
+    expected_tracks: int | None = None,
 ) -> Path:
     """Build ``manifest.json`` under ``output_dir`` and return its path.
 
@@ -59,6 +61,9 @@ def build_manifest(
     so they can be serialised as POSIX-relative URLs for the frontend.
 
     Track order in the resulting manifest matches the order of ``entries``.
+
+    The write is atomic (temp file + rename), so a frontend polling the
+    manifest never sees a half-written file.
 
     Args:
         playlist_id: 22-char Spotify playlist ID for traceability.
@@ -69,6 +74,13 @@ def build_manifest(
         entries: Per-track inputs; one row in ``manifest.tracks`` per entry.
         output_dir: Directory to write the manifest into; created if missing.
             All ``stem_paths`` must be located under this directory.
+        complete: ``True`` when ingest has finished — the frontend uses this
+            to stop polling for new tracks. ``False`` during incremental
+            mid-ingest writes.
+        expected_tracks: Total number of tracks the run is processing
+            (after ``--limit``), so the frontend can show "X / Y ready"
+            progress. ``None`` (the default) means the field is omitted from
+            the manifest.
 
     Returns:
         Path to the written ``manifest.json``.
@@ -77,6 +89,7 @@ def build_manifest(
     manifest: dict[str, Any] = {
         "version": MANIFEST_VERSION,
         "generated_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
+        "complete": complete,
         "source_playlist": {
             "spotify_id": playlist_id,
             "url": playlist_url,
@@ -85,11 +98,16 @@ def build_manifest(
         "stems": list(stems),
         "tracks": [_serialize_entry(e, stems, output_dir) for e in entries],
     }
+    if expected_tracks is not None:
+        manifest["expected_tracks"] = expected_tracks
+
     manifest_path = output_dir / MANIFEST_FILENAME
-    manifest_path.write_text(
+    tmp = manifest_path.with_suffix(manifest_path.suffix + ".tmp")
+    tmp.write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
+    tmp.replace(manifest_path)
     return manifest_path
 
 

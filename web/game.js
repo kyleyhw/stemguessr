@@ -1,7 +1,7 @@
 // game.js — StemGuessr browser-side game logic.
 //
 // Reads manifest.json (Phase 5 schema v1) from the same directory, then
-// runs the round-by-round Bandle-style guessing loop:
+// runs the round-by-round guessing loop:
 //   round k reveals stems[0..k]; player guesses; correct or no-guesses-left
 //   ends the track and reveals the answer.
 //
@@ -27,7 +27,14 @@ const state = {
     activeSources: [],     // currently-playing AudioBufferSourceNodes
     playStartContextTime: 0,  // audioCtx.currentTime at play() call
     rafId: null,           // requestAnimationFrame id for waveform redraw loop
+    knownTrackIds: new Set(),  // ids of tracks already in trackOrder
+    pollTimer: null,       // setTimeout handle for the next manifest poll
 };
+
+// Manifest-polling cadence while ingest is still in progress (manifest.complete=false).
+// 2 s is fast enough that newly-separated tracks become playable promptly without
+// hammering the local server.
+const POLL_INTERVAL_MS = 2000;
 
 // ============================================================
 // DOM cache
@@ -56,38 +63,109 @@ const els = {
 
 async function init() {
     els.status.textContent = 'Loading manifest…';
+    const ok = await fetchAndUpdateManifest();
+    if (!ok) return;
+
+    wireEvents();
+
+    if (state.trackOrder.length > 0) {
+        await loadCurrentTrack();
+    } else if (!state.manifest.complete) {
+        els.status.textContent = 'Waiting for first track to be separated…';
+        els.playBtn.disabled = true;
+        els.guessInput.disabled = true;
+        els.skipBtn.disabled = true;
+    } else {
+        els.status.textContent = 'Manifest has no tracks.';
+    }
+
+    if (!state.manifest.complete) {
+        scheduleManifestPoll();
+    }
+}
+
+/**
+ * Fetch manifest.json, validate, merge into state.
+ * Returns false on a fatal error (status set, caller should bail).
+ */
+async function fetchAndUpdateManifest() {
     let manifest;
     try {
         const response = await fetch('manifest.json', { cache: 'no-cache' });
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         manifest = await response.json();
     } catch (e) {
-        els.status.textContent = `Could not load manifest.json — ${e.message}. ` +
+        els.status.textContent =
+            `Could not load manifest.json — ${e.message}. ` +
             'Run `stemguessr ingest <playlist_url>` first.';
-        return;
+        return false;
     }
-
     if (manifest.version !== 1) {
         els.status.textContent =
             `Unsupported manifest version: ${manifest.version}. Frontend supports v1.`;
-        return;
-    }
-    if (!manifest.tracks || manifest.tracks.length === 0) {
-        els.status.textContent = 'Manifest has no tracks.';
-        return;
+        return false;
     }
 
+    const isFirstFetch = state.manifest === null;
     state.manifest = manifest;
-    state.trackOrder = shuffle([...manifest.tracks]);
 
-    els.status.textContent =
-        `${manifest.tracks.length} tracks · ${manifest.stems.length} stems · ` +
-        `${manifest.model}`;
+    const wasAtEnd =
+        state.trackOrder.length > 0
+        && state.currentIndex >= state.trackOrder.length;
 
-    wireEvents();
-    await loadCurrentTrack();
+    const newTracks = manifest.tracks.filter(
+        (t) => !state.knownTrackIds.has(t.id),
+    );
+
+    if (isFirstFetch && manifest.tracks.length > 0) {
+        // Initial population — shuffle once.
+        const shuffled = shuffle([...manifest.tracks]);
+        state.trackOrder = shuffled;
+        for (const t of shuffled) state.knownTrackIds.add(t.id);
+    } else if (newTracks.length > 0) {
+        // Incremental — append in playlist order without disturbing the
+        // existing shuffle of already-known tracks.
+        state.trackOrder.push(...newTracks);
+        for (const t of newTracks) state.knownTrackIds.add(t.id);
+    }
+
+    updateProgressLine();
+
+    // If a poll just rescued us from the playlist-complete state by
+    // appending more tracks, advance into them.
+    if (!isFirstFetch && wasAtEnd && state.currentIndex < state.trackOrder.length) {
+        await loadCurrentTrack();
+    }
+
+    return true;
+}
+
+function updateProgressLine() {
+    if (!state.manifest) return;
+    const total = state.trackOrder.length;
+    const trackText =
+        total > 0 && state.currentIndex < total
+            ? `Track ${state.currentIndex + 1}/${total}`
+            : (state.manifest.complete ? '🎉 Playlist complete.' : 'Waiting…');
+    if (state.manifest.complete) {
+        els.status.textContent =
+            `${trackText} · ${state.manifest.stems.length} stems · ${state.manifest.model}`;
+    } else {
+        const ready = state.manifest.tracks.length;
+        const expected = state.manifest.expected_tracks ?? '?';
+        els.status.textContent = `${trackText} · ingesting ${ready}/${expected}`;
+    }
+}
+
+function scheduleManifestPoll() {
+    if (state.pollTimer !== null) return;
+    state.pollTimer = setTimeout(async () => {
+        state.pollTimer = null;
+        await fetchAndUpdateManifest();
+        if (state.manifest && !state.manifest.complete) {
+            scheduleManifestPoll();
+        }
+    }, POLL_INTERVAL_MS);
 }
 
 function wireEvents() {
@@ -127,10 +205,16 @@ async function loadCurrentTrack() {
 
     const track = state.trackOrder[state.currentIndex];
     if (!track) {
-        // Reached the end of the playlist
-        els.status.textContent = '🎉 Playlist complete.';
+        // No (more) tracks available right now.
         els.playBtn.disabled = true;
         els.guessInput.disabled = true;
+        els.skipBtn.disabled = true;
+        if (state.manifest.complete) {
+            els.status.textContent = '🎉 Playlist complete.';
+        } else {
+            els.status.textContent =
+                'Waiting for next track to finish separating…';
+        }
         return;
     }
 
@@ -139,14 +223,15 @@ async function loadCurrentTrack() {
         'fetching stems…';
 
     try {
-        await Promise.all(state.manifest.stems.map((s) => loadBuffer(track.stems[s])));
+        await Promise.all(
+            state.manifest.stems.map((s) => loadBuffer(track.stems[s])),
+        );
     } catch (e) {
         els.status.textContent = `Stem fetch failed: ${e.message}`;
         return;
     }
 
-    els.status.textContent =
-        `Track ${state.currentIndex + 1}/${state.trackOrder.length}`;
+    updateProgressLine();
     els.playBtn.disabled = false;
     els.guessInput.focus();
     updateRoundLabel();

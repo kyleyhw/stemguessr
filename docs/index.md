@@ -1,6 +1,6 @@
 # StemGuessr Documentation
 
-This is the documentation hub for StemGuessr — a Bandle-style music-guessing game built around source-separated stems from a Spotify public playlist URL.
+This is the documentation hub for StemGuessr — a music-guessing game built around source-separated stems from a Spotify public playlist URL.
 
 ## Top-level documents
 

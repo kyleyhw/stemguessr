@@ -1,7 +1,7 @@
 [project]
 name = "stemguessr"
-version = "0.1.1"
-description = "A Bandle-style music-guessing game built around Demucs-separated stems from a Spotify public playlist URL."
+version = "0.1.2"
+description = "A music-guessing game built around Demucs-separated stems from a Spotify public playlist URL."
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [

@@ -1,4 +1,4 @@
-"""StemGuessr — Bandle-style music-guessing game built around Demucs-separated
+"""StemGuessr — music-guessing game built around Demucs-separated
 stems sourced from a Spotify public playlist URL.
 
 This package's runtime entry point is :func:`stemguessr.cli.main`, which is
