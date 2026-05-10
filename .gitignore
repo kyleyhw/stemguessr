@@ -70,6 +70,7 @@ test_cache/
 # --- Playwright MCP artefacts and ad-hoc screenshots at repo root ---
 .playwright-mcp/
 /phase*_ui_*.png
+/diag*.png
 
 # --- Logs ---
 *.log
