@@ -15,6 +15,7 @@ Public entry points:
 
 from __future__ import annotations
 
+import dataclasses
 import shutil
 from collections.abc import Callable
 from importlib.metadata import PackageNotFoundError
@@ -39,6 +40,7 @@ from stemguessr.spotify import (
     SpotifyError,
     Track,
     fetch_playlist_tracks,
+    fetch_track_cover_url,
     parse_playlist_id,
 )
 
@@ -126,9 +128,16 @@ def _process_track(
         _clear_track_cache(track_id, cache_dir)
 
     preview_path = download_preview(track.preview_url, track_id, cache_dir)
+
+    # Best-effort cover-art fetch via Spotify oEmbed. Failure is silently
+    # tolerated — the manifest will record cover_url=None and the frontend
+    # falls back to its plain "title + artists" reveal.
+    cover_url = track.cover_url or fetch_track_cover_url(track.spotify_id)
+    track_with_cover = dataclasses.replace(track, cover_url=cover_url)
+
     stem_dir = cache_dir / "stems" / track_id
     stem_paths = separate(preview_path, stem_dir, model=model)
-    return TrackBuildEntry(track=track, stem_paths=stem_paths)
+    return TrackBuildEntry(track=track_with_cover, stem_paths=stem_paths)
 
 
 def run_ingest_pipeline(

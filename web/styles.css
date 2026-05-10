@@ -332,6 +332,17 @@ input[type="text"]:focus {
     text-align: center;
 }
 
+.reveal-cover {
+    display: block;
+    width: 220px;
+    height: 220px;
+    margin: 0 auto 1rem;
+    border-radius: 4px;
+    object-fit: cover;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    background: var(--ink);
+}
+
 .reveal h2 {
     font-family: 'Fraunces', Georgia, serif;
     font-weight: 800;

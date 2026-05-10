@@ -17,6 +17,7 @@
             "title": "Example Song A",
             "artists": ["Example Artist"],
             "duration_ms": 200000,
+            "cover_url": "https://image-cdn-fa.spotifycdn.com/image/PLACEHOLDER",
             "stems": {
                 "drums":  "stems/FIXTURE_TRACK_001/drums.wav",
                 "bass":   "stems/FIXTURE_TRACK_001/bass.wav",
@@ -31,6 +32,7 @@
             "title": "Example Song B",
             "artists": ["Another Artist", "feat. Someone"],
             "duration_ms": 245000,
+            "cover_url": null,
             "stems": {
                 "drums":  "stems/FIXTURE_TRACK_002/drums.wav",
                 "bass":   "stems/FIXTURE_TRACK_002/bass.wav",

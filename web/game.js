@@ -52,6 +52,7 @@ const els = {
     skipBtn:        document.getElementById('skip-btn'),
     guessList:      document.getElementById('guess-list'),
     reveal:         document.getElementById('reveal'),
+    revealCover:    document.getElementById('reveal-cover'),
     revealTitle:    document.getElementById('reveal-title'),
     revealArtists:  document.getElementById('reveal-artists'),
     revealOutcome:  document.getElementById('reveal-outcome'),
@@ -724,6 +725,14 @@ function advance() {
 function revealAnswer({ won, atRound }) {
     stop();
     const track = state.trackOrder[state.currentIndex];
+    if (track.cover_url) {
+        els.revealCover.src = track.cover_url;
+        els.revealCover.alt = `Album cover for ${track.title}`;
+        els.revealCover.hidden = false;
+    } else {
+        els.revealCover.removeAttribute('src');
+        els.revealCover.hidden = true;
+    }
     els.revealTitle.textContent = track.title;
     els.revealArtists.textContent = track.artists.join(', ');
     els.revealOutcome.textContent = won

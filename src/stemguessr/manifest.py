@@ -141,5 +141,6 @@ def _serialize_entry(
         "title": entry.track.title,
         "artists": list(entry.track.artists),
         "duration_ms": entry.track.duration_ms,
+        "cover_url": entry.track.cover_url,
         "stems": stem_urls,
     }

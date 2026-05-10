@@ -104,8 +104,14 @@ def stub_pipeline(monkeypatch: pytest.MonkeyPatch) -> StubState:
             paths[stem] = p
         return paths
 
+    def fake_fetch_track_cover_url(spotify_id: str) -> str | None:
+        return f"https://example.cdn/cover/{spotify_id}.jpg"
+
     monkeypatch.setattr(
         "stemguessr.cli.fetch_playlist_tracks", fake_fetch_playlist_tracks
+    )
+    monkeypatch.setattr(
+        "stemguessr.cli.fetch_track_cover_url", fake_fetch_track_cover_url
     )
     monkeypatch.setattr("stemguessr.cli.download_preview", fake_download_preview)
     monkeypatch.setattr("stemguessr.cli.separate", fake_separate)

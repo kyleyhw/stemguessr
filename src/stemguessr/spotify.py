@@ -43,6 +43,9 @@ _BROWSER_USER_AGENT = (
 )
 
 EMBED_URL_TEMPLATE = "https://open.spotify.com/embed/playlist/{playlist_id}"
+OEMBED_TRACK_URL_TEMPLATE = (
+    "https://open.spotify.com/oembed?url=https://open.spotify.com/track/{spotify_id}"
+)
 _NEXT_DATA_PATTERN = re.compile(
     r'<script[^>]+id="__NEXT_DATA__"[^>]*>(.*?)</script>',
     re.DOTALL,
@@ -76,6 +79,7 @@ class Track:
     artists: tuple[str, ...]
     duration_ms: int
     preview_url: str | None
+    cover_url: str | None = None
 
 
 class SpotifyError(RuntimeError):
@@ -228,4 +232,47 @@ def _track_from_embed_item(item: dict[str, Any]) -> Track:
         artists=artists,
         duration_ms=int(item.get("duration", 0) or 0),
         preview_url=preview_url,
+        cover_url=None,
     )
+
+
+def fetch_track_cover_url(
+    spotify_id: str,
+    *,
+    client: httpx.Client | None = None,
+) -> str | None:
+    """Fetch the album-cover thumbnail URL for a track via Spotify's oEmbed
+    endpoint.
+
+    Returns the ``thumbnail_url`` from the oEmbed JSON response (an i.scdn.co
+    or image-cdn-fa.spotifycdn.com URL pointing to the cover image), or
+    ``None`` if any step fails. Best-effort: callers treat ``None`` as
+    "no cover available" and continue.
+
+    The oEmbed endpoint is Spotify's official pattern for third-party
+    embedding; it is publicly accessible without authentication and is more
+    stable than scraping the track's embed page (whose ``coverArt`` field
+    is empty for tracks).
+    """
+    url = OEMBED_TRACK_URL_TEMPLATE.format(spotify_id=spotify_id)
+
+    owns_client = client is None
+    if client is None:
+        client = httpx.Client(
+            headers={"User-Agent": _BROWSER_USER_AGENT},
+            follow_redirects=True,
+            timeout=10.0,
+        )
+    try:
+        response = client.get(url)
+        if response.status_code != 200:
+            return None
+        data = response.json()
+    except (httpx.HTTPError, json.JSONDecodeError):
+        return None
+    finally:
+        if owns_client:
+            client.close()
+
+    thumbnail = data.get("thumbnail_url")
+    return thumbnail if isinstance(thumbnail, str) and thumbnail else None
