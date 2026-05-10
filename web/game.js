@@ -41,20 +41,30 @@ const POLL_INTERVAL_MS = 2000;
 // ============================================================
 
 const els = {
-    status:        document.getElementById('status-line'),
-    canvas:        document.getElementById('waveform'),
-    playBtn:       document.getElementById('play-btn'),
-    roundLabel:    document.getElementById('round-label'),
-    volumeSlider:  document.getElementById('volume-slider'),
-    guessInput:    document.getElementById('guess-input'),
-    guessForm:     document.getElementById('guess-form'),
-    skipBtn:       document.getElementById('skip-btn'),
-    guessList:     document.getElementById('guess-list'),
-    reveal:        document.getElementById('reveal'),
-    revealTitle:   document.getElementById('reveal-title'),
-    revealArtists: document.getElementById('reveal-artists'),
-    revealOutcome: document.getElementById('reveal-outcome'),
-    nextBtn:       document.getElementById('next-track-btn'),
+    status:         document.getElementById('status-line'),
+    canvas:         document.getElementById('waveform'),
+    playBtn:        document.getElementById('play-btn'),
+    roundLabel:     document.getElementById('round-label'),
+    volumeSlider:   document.getElementById('volume-slider'),
+    guessInput:     document.getElementById('guess-input'),
+    guessForm:      document.getElementById('guess-form'),
+    skipBtn:        document.getElementById('skip-btn'),
+    guessList:      document.getElementById('guess-list'),
+    reveal:         document.getElementById('reveal'),
+    revealTitle:    document.getElementById('reveal-title'),
+    revealArtists:  document.getElementById('reveal-artists'),
+    revealOutcome:  document.getElementById('reveal-outcome'),
+    nextBtn:        document.getElementById('next-track-btn'),
+    // Ingest form (visible only when there is no manifest yet, or the
+    // manifest is finalised but empty).
+    ingestPrompt:   document.getElementById('ingest-prompt'),
+    ingestForm:     document.getElementById('ingest-form'),
+    playlistInput:  document.getElementById('playlist-url-input'),
+    stemsSelect:    document.getElementById('stems-select'),
+    limitInput:     document.getElementById('limit-input'),
+    ingestSubmit:   document.getElementById('ingest-submit'),
+    playerSection:  document.getElementById('player-section'),
+    guessSection:   document.getElementById('guess-section'),
 };
 
 // ============================================================
@@ -62,21 +72,35 @@ const els = {
 // ============================================================
 
 async function init() {
-    els.status.textContent = 'Loading manifest…';
-    const ok = await fetchAndUpdateManifest();
-    if (!ok) return;
-
     wireEvents();
+    els.status.textContent = 'Checking for an existing playlist…';
 
-    if (state.trackOrder.length > 0) {
-        await loadCurrentTrack();
-    } else if (!state.manifest.complete) {
+    // Try to fetch the manifest. If it doesn't exist (404), or it exists but
+    // is finalised with zero tracks, show the ingest form so the user can
+    // paste a playlist URL.
+    const fetched = await fetchAndUpdateManifest({ silent: true });
+
+    if (!fetched) {
+        // 404 or unreadable — show the form for a fresh start.
+        showIngestPrompt('Paste a public Spotify playlist URL to begin.');
+        return;
+    }
+
+    if (state.trackOrder.length === 0 && state.manifest.complete) {
+        showIngestPrompt('No tracks in the current cache. Paste a URL to start a new ingest.');
+        return;
+    }
+
+    // Manifest is usable; continue with the normal game flow.
+    hideIngestPrompt();
+    // fetchAndUpdateManifest has already triggered loadCurrentTrack if there
+    // was a track to load. If trackOrder is still empty and ingest is in
+    // progress, paint the explicit "waiting for first track" state.
+    if (state.trackOrder.length === 0 && !state.manifest.complete) {
         els.status.textContent = 'Waiting for first track to be separated…';
         els.playBtn.disabled = true;
         els.guessInput.disabled = true;
         els.skipBtn.disabled = true;
-    } else {
-        els.status.textContent = 'Manifest has no tracks.';
     }
 
     if (!state.manifest.complete) {
@@ -84,20 +108,92 @@ async function init() {
     }
 }
 
+function showIngestPrompt(message) {
+    els.ingestPrompt.hidden = false;
+    els.playerSection.hidden = true;
+    els.guessSection.hidden = true;
+    els.reveal.hidden = true;
+    els.status.textContent = message;
+    els.playlistInput.focus();
+}
+
+function hideIngestPrompt() {
+    els.ingestPrompt.hidden = true;
+    els.playerSection.hidden = false;
+    els.guessSection.hidden = false;
+}
+
+async function submitIngestForm(event) {
+    event.preventDefault();
+    const playlistUrl = els.playlistInput.value.trim();
+    if (!playlistUrl) return;
+
+    const nStems = parseInt(els.stemsSelect.value, 10);
+    const limitRaw = els.limitInput.value.trim();
+    const limit = limitRaw === '' ? null : parseInt(limitRaw, 10);
+
+    els.ingestSubmit.disabled = true;
+    els.status.textContent = 'Starting ingest…';
+
+    let response;
+    try {
+        response = await fetch('/api/ingest', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                playlist_url: playlistUrl,
+                n_stems: nStems,
+                limit,
+            }),
+        });
+    } catch (e) {
+        els.status.textContent =
+            `Could not reach the server: ${e.message}. ` +
+            'Is `stemguessr serve` running?';
+        els.ingestSubmit.disabled = false;
+        return;
+    }
+
+    if (!response.ok) {
+        const body = await response.text();
+        els.status.textContent = `Ingest rejected (HTTP ${response.status}): ${body}`;
+        els.ingestSubmit.disabled = false;
+        return;
+    }
+
+    // Reset client state so the new playlist is picked up cleanly on the
+    // next poll (and the Fisher–Yates shuffle re-runs against the new tracks).
+    state.manifest = null;
+    state.trackOrder = [];
+    state.knownTrackIds = new Set();
+    state.currentIndex = 0;
+
+    hideIngestPrompt();
+    els.status.textContent = 'Ingest started — waiting for first track…';
+    els.playBtn.disabled = true;
+    els.guessInput.disabled = true;
+    els.skipBtn.disabled = true;
+    els.ingestSubmit.disabled = false;
+
+    scheduleManifestPoll();
+}
+
 /**
  * Fetch manifest.json, validate, merge into state.
  * Returns false on a fatal error (status set, caller should bail).
  */
-async function fetchAndUpdateManifest() {
+async function fetchAndUpdateManifest(opts = {}) {
+    const silent = !!opts.silent;
     let manifest;
     try {
         const response = await fetch('manifest.json', { cache: 'no-cache' });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         manifest = await response.json();
     } catch (e) {
-        els.status.textContent =
-            `Could not load manifest.json — ${e.message}. ` +
-            'Run `stemguessr ingest <playlist_url>` first.';
+        if (!silent) {
+            els.status.textContent =
+                `Could not load manifest.json — ${e.message}.`;
+        }
         return false;
     }
     if (manifest.version !== 1) {
@@ -109,9 +205,11 @@ async function fetchAndUpdateManifest() {
     const isFirstFetch = state.manifest === null;
     state.manifest = manifest;
 
-    const wasAtEnd =
-        state.trackOrder.length > 0
-        && state.currentIndex >= state.trackOrder.length;
+    // "No current playable track" — currentIndex is at or past the end of
+    // the (possibly empty) trackOrder. Captured BEFORE we merge new tracks
+    // so we can detect the transition into "has playable track".
+    const wasWithoutPlayable =
+        state.currentIndex >= state.trackOrder.length;
 
     const newTracks = manifest.tracks.filter(
         (t) => !state.knownTrackIds.has(t.id),
@@ -131,9 +229,11 @@ async function fetchAndUpdateManifest() {
 
     updateProgressLine();
 
-    // If a poll just rescued us from the playlist-complete state by
-    // appending more tracks, advance into them.
-    if (!isFirstFetch && wasAtEnd && state.currentIndex < state.trackOrder.length) {
+    // Transition: "no playable track" → "has one". Covers three cases:
+    //   1. initial fetch with tracks already present
+    //   2. polling brings in the first track after an empty-manifest start
+    //   3. user finished every track, then polling appends a new one
+    if (wasWithoutPlayable && state.currentIndex < state.trackOrder.length) {
         await loadCurrentTrack();
     }
 
@@ -176,6 +276,7 @@ function wireEvents() {
     });
     els.skipBtn.addEventListener('click', skip);
     els.nextBtn.addEventListener('click', nextTrack);
+    els.ingestForm.addEventListener('submit', submitIngestForm);
 
     // Initialise slider to the documented default; user adjustments live-update
     // the master gain.

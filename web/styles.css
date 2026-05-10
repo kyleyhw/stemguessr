@@ -77,6 +77,81 @@ main {
     gap: 1.6rem;
 }
 
+/* Ingest prompt (initial form before any tracks exist) */
+
+.ingest-prompt {
+    background: var(--cream-deep);
+    border: 1px solid var(--cream-shadow);
+    border-radius: var(--radius);
+    padding: 1.6rem;
+    box-shadow: inset 0 0 0 1px var(--cream);
+}
+
+.ingest-prompt h2 {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 800;
+    font-style: italic;
+    font-size: 1.6rem;
+    color: var(--oxblood);
+    margin-bottom: 1rem;
+}
+
+.ingest-prompt form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+}
+
+.ingest-prompt label {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-soft);
+}
+
+.ingest-prompt input[type="url"],
+.ingest-prompt input[type="number"],
+.ingest-prompt select {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.95rem;
+    padding: 0.55rem 0.8rem;
+    background: var(--cream);
+    border: 1px solid var(--cream-shadow);
+    border-radius: 4px;
+    color: var(--ink);
+    outline: none;
+}
+
+.ingest-prompt input[type="url"]:focus,
+.ingest-prompt input[type="number"]:focus,
+.ingest-prompt select:focus {
+    border-color: var(--oxblood);
+}
+
+.ingest-options {
+    display: grid;
+    grid-template-columns: auto 1fr auto auto;
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 0.3rem;
+}
+
+.ingest-options input[type="number"] {
+    width: 5.5rem;
+}
+
+#ingest-submit {
+    margin-top: 0.4rem;
+    align-self: flex-start;
+}
+
+.ingest-hint {
+    margin-top: 0.4rem;
+    font-size: 0.78rem;
+    color: var(--ink-faint);
+    line-height: 1.4;
+}
+
 /* Player block */
 
 .player {

@@ -4,7 +4,7 @@ A music-guessing game built around source-separated stems. Given any *public* Sp
 
 ## Status
 
-**v0.1.2 — 2026-05-10.** Progressive ingest: the browser starts playing as soon as the first track is separated, and the rest stream in as Demucs finishes them. No Spotify credentials required; full Demucs separation; volume control. See [`CHANGELOG.md`](CHANGELOG.md) for the release log and [`PROJECT_PLAN.md`](PROJECT_PLAN.md) for the phased build log.
+**v0.1.3 — 2026-05-10.** `stemguessr serve` runs the whole thing in one command: open the page, paste a Spotify playlist URL, play. Progressive ingest streams tracks in as Demucs separates them; volume slider; no Spotify credentials required. See [`CHANGELOG.md`](CHANGELOG.md) for the release log and [`PROJECT_PLAN.md`](PROJECT_PLAN.md) for the phased build log.
 
 ## System architecture
 
@@ -114,7 +114,7 @@ stemguessr/
 
 ## Quickstart
 
-End-to-end: clone, install, ingest a public playlist, copy the static frontend assets next to the cache, and serve. **No Spotify credentials are required** — playlist data and preview URLs come from Spotify's public embed page.
+One command from clone to playable. **No Spotify credentials needed** — playlist data and preview URLs come from Spotify's public embed page.
 
 ```bash
 # 1. Clone and install (Python 3.12+ required; uv will fetch if missing)
@@ -122,22 +122,16 @@ git clone https://github.com/kyleyhw/stemguessr.git
 cd stemguessr
 uv sync
 
-# 2. Ingest a public playlist. The first run downloads ~250 MB of Demucs
-#    weights and runs CPU separation (~5-15 s per 30 s clip on CPU); later
-#    runs over the same playlist are essentially instant (cache hit). Use
-#    --limit N for a quick smoke test against a large playlist.
-uv run stemguessr ingest \
-    "https://open.spotify.com/playlist/<id>" \
-    --out ./cache \
-    --limit 5
+# 2. Run the server.
+uv run stemguessr serve --out ./cache
 
-# 3. Copy frontend assets next to the manifest and serve.
-cp web/index.html web/styles.css web/game.js ./cache/
-cd ./cache
-python -m http.server 8000
-
-# 4. Open http://localhost:8000/ in a Chromium-based browser.
+# 3. Open http://localhost:8765/ in a Chromium-based browser, paste a
+#    public Spotify playlist URL into the form, and play. The first run
+#    downloads ~250 MB of Demucs weights; subsequent tracks separate in
+#    ~5-15 s on CPU and become playable as soon as they finish.
 ```
+
+For non-interactive batch use, the underlying ingest is also exposed as `stemguessr ingest <url> [--out PATH] [--stems {4,6}] [--limit N] [--force-refresh]`. See [`docs/cli.md`](docs/cli.md).
 
 ## Development
 

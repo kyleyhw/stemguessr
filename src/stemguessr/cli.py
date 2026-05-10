@@ -16,6 +16,7 @@ Public entry points:
 from __future__ import annotations
 
 import shutil
+from collections.abc import Callable
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 from pathlib import Path
@@ -130,6 +131,76 @@ def _process_track(
     return TrackBuildEntry(track=track, stem_paths=stem_paths)
 
 
+def run_ingest_pipeline(
+    playlist_url: str,
+    cache_dir: Path,
+    *,
+    n_stems: int = 4,
+    limit: int | None = None,
+    force_refresh: bool = False,
+    log: Callable[[str], None] = lambda _: None,
+) -> Path:
+    """Run the ingest end-to-end pipeline: fetch playlist → for each track,
+    download the preview and separate it → write manifest progressively.
+
+    Used by both the ``ingest`` CLI command and the HTTP server. ``log`` is
+    called with one line per progress event; pass ``typer.echo`` from the
+    CLI, or a thread-safe printer from the server.
+
+    Returns the path of the final ``manifest.json`` (with ``complete=True``).
+    The manifest is also rewritten with ``complete=False`` after every
+    successful track separation, so a polling frontend can pick up tracks
+    as they land.
+
+    Raises:
+        SpotifyError: URL parse failure or playlist fetch failure.
+        ValueError: ``n_stems`` is not 4 or 6.
+    """
+    model = _model_for_stems(n_stems)
+    playlist_id = parse_playlist_id(playlist_url)
+
+    log(f"Fetching tracks for playlist {playlist_id}...")
+    tracks = fetch_playlist_tracks(playlist_url)
+
+    if limit is not None:
+        tracks = tracks[:limit]
+        log(f"  {len(tracks)} tracks (limited from playlist by --limit).")
+    else:
+        log(f"  {len(tracks)} tracks found.")
+
+    expected = len(tracks)
+    entries: list[TrackBuildEntry] = []
+
+    def _write_manifest(*, complete: bool) -> Path:
+        return build_manifest(
+            playlist_id=playlist_id,
+            playlist_url=playlist_url,
+            model=model,
+            stems=MODEL_STEMS[model],
+            entries=entries,
+            output_dir=cache_dir,
+            complete=complete,
+            expected_tracks=expected,
+        )
+
+    _write_manifest(complete=False)
+
+    try:
+        for i, track in enumerate(tracks, start=1):
+            log(f"[{i}/{len(tracks)}] {track.title!r} — {', '.join(track.artists)}")
+            entry = _process_track(track, cache_dir, model, force_refresh)
+            if entry is not None:
+                entries.append(entry)
+                _write_manifest(complete=False)
+    finally:
+        manifest_path = _write_manifest(complete=True)
+        log(
+            f"Done. {len(entries)}/{expected} tracks have stems. "
+            f"Manifest at {manifest_path}"
+        )
+    return manifest_path
+
+
 @app.command()
 def ingest(
     playlist_url: Annotated[
@@ -180,68 +251,53 @@ def ingest(
 ) -> None:
     """Ingest a Spotify playlist into stems and build the game manifest."""
     try:
-        model = _model_for_stems(n_stems)
-    except ValueError as e:
-        typer.echo(f"error: {e}", err=True)
-        raise typer.Exit(1) from e
-
-    try:
-        playlist_id = parse_playlist_id(playlist_url)
-    except SpotifyError as e:
-        typer.echo(f"error: {e}", err=True)
-        raise typer.Exit(1) from e
-
-    typer.echo(f"Fetching tracks for playlist {playlist_id}...")
-    try:
-        tracks = fetch_playlist_tracks(playlist_url)
-    except SpotifyError as e:
-        typer.echo(f"error: {e}", err=True)
-        raise typer.Exit(1) from e
-
-    if limit is not None:
-        tracks = tracks[:limit]
-        typer.echo(f"  {len(tracks)} tracks (limited from playlist by --limit).")
-    else:
-        typer.echo(f"  {len(tracks)} tracks found.")
-
-    expected = len(tracks)
-    entries: list[TrackBuildEntry] = []
-
-    def _write_manifest(*, complete: bool) -> Path:
-        return build_manifest(
-            playlist_id=playlist_id,
-            playlist_url=playlist_url,
-            model=model,
-            stems=MODEL_STEMS[model],
-            entries=entries,
-            output_dir=out,
-            complete=complete,
-            expected_tracks=expected,
+        run_ingest_pipeline(
+            playlist_url,
+            out,
+            n_stems=n_stems,
+            limit=limit,
+            force_refresh=force_refresh,
+            log=typer.echo,
         )
+    except (ValueError, SpotifyError) as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(1) from e
 
-    # Initial empty manifest so a frontend that's already polling sees the
-    # ingest in progress (complete=false, tracks=[]).
-    _write_manifest(complete=False)
 
-    try:
-        for i, track in enumerate(tracks, start=1):
-            typer.echo(
-                f"[{i}/{len(tracks)}] {track.title!r} — {', '.join(track.artists)}"
-            )
-            entry = _process_track(track, out, model, force_refresh)
-            if entry is not None:
-                entries.append(entry)
-                # Incremental write: the frontend can pick up this track on
-                # its next poll and start playing immediately.
-                _write_manifest(complete=False)
-    finally:
-        # Always finalise — even on KeyboardInterrupt — so the frontend stops
-        # polling and treats the partial result as the final playlist.
-        manifest_path = _write_manifest(complete=True)
-        typer.echo(
-            f"\nDone. {len(entries)}/{expected} tracks have stems. "
-            f"Manifest at {manifest_path}"
-        )
+@app.command()
+def serve(
+    out: Annotated[
+        Path,
+        typer.Option(
+            "--out",
+            "-o",
+            help="Cache root directory the server reads from and writes into.",
+        ),
+    ] = Path("./cache"),
+    host: Annotated[
+        str,
+        typer.Option(
+            "--host", help="Bind address. Default 127.0.0.1 (localhost-only)."
+        ),
+    ] = "127.0.0.1",
+    port: Annotated[
+        int,
+        typer.Option("--port", "-p", help="TCP port to listen on."),
+    ] = 8765,
+) -> None:
+    """Run the StemGuessr web server.
+
+    Hosts the static frontend, serves the cache contents, and exposes
+    ``POST /api/ingest`` so the browser can paste a Spotify playlist URL
+    and start ingest without going back to the terminal.
+    """
+    from stemguessr.server import serve_forever
+
+    out.mkdir(parents=True, exist_ok=True)
+    typer.echo(f"StemGuessr serving on http://{host}:{port}/")
+    typer.echo("Open the URL, paste a public Spotify playlist URL, and play.")
+    typer.echo("Press Ctrl-C to stop.")
+    serve_forever(cache_dir=out, host=host, port=port, log=typer.echo)
 
 
 def main() -> None:

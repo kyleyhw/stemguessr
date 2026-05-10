@@ -5,9 +5,12 @@ This document describes the command-line interface implemented in [`src/stemgues
 ## Synopsis
 
 ```
+stemguessr serve [--out PATH] [--host HOST] [--port N]
 stemguessr ingest <playlist_url> [--out PATH] [--stems {4,6}] [--force-refresh] [--limit N]
 stemguessr --version
 ```
+
+For interactive use, `stemguessr serve` is the recommended entry point — it hosts the frontend, serves the cache, and exposes `POST /api/ingest` so a playlist URL pasted into the in-page form drives the whole pipeline. `ingest` remains for batch / scripted use.
 
 `stemguessr` is registered as a console script in `pyproject.toml`. After `uv sync` (or `pip install`), it is on the `PATH`.
 
@@ -61,6 +64,26 @@ The whole pipeline is a single linear function; per-track failures (Spotify did 
 ## Environment variables
 
 None required. Earlier versions used the Spotify Web API's Client Credentials flow with `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET`; the embed-based path in v0.1.1 onwards needs no credentials at all.
+
+## `stemguessr serve`
+
+Hosts the frontend and the cache, and exposes a `POST /api/ingest` endpoint so an `ingest` run can be started from the browser without dropping back to the terminal.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--out` / `-o` | `./cache` | Cache root the server reads from and writes into. |
+| `--host` | `127.0.0.1` | Bind address. The localhost default keeps the server private to the machine. |
+| `--port` / `-p` | `8765` | TCP port. |
+
+Routes:
+
+| Method | Path | Behaviour |
+|--------|------|-----------|
+| GET | `/`, `/index.html`, `/styles.css`, `/game.js` | Static frontend, served from the package's `web/` directory. |
+| GET | `/manifest.json`, `/stems/*`, `/previews/*` | Cache contents, served from `--out`. |
+| POST | `/api/ingest` | JSON body: `{"playlist_url": "...", "n_stems": 4, "limit": null}`. Starts an ingest run in a daemon thread and returns 202. Concurrent calls while a run is in flight return 409 Conflict. |
+
+The server is single-flight: only one ingest runs at a time. Cancellation is best-effort — closing the server with Ctrl-C terminates the daemon thread; the `try / finally` in `run_ingest_pipeline` still writes a `complete: true` manifest with whatever entries had been separated.
 
 ## Output layout
 

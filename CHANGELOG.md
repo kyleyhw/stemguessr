@@ -4,6 +4,27 @@ All notable changes to StemGuessr are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] — 2026-05-10
+
+The whole pipeline is now driven from the browser. `stemguessr serve` starts an HTTP server that hosts the frontend, serves the cache, and exposes `POST /api/ingest`; the page shows a "paste a Spotify playlist URL" form on first visit, accepts it, kicks off ingest in a background thread, and starts playing as soon as the first track is separated.
+
+### Added
+
+- **`stemguessr serve [--out PATH] [--host HOST] [--port N]`** — single command that gets you from `git clone` to a playable game with no further terminal interaction. Defaults to `127.0.0.1:8765` (localhost-only).
+- **`POST /api/ingest`** endpoint (JSON body: `playlist_url`, optional `n_stems`, `limit`). Single-flight: concurrent calls return 409.
+- **Ingest form in the frontend.** Shown when `manifest.json` is absent or finalised-but-empty; hidden once the manifest has tracks. Has URL input, 4-vs-6 stems toggle, optional limit, and a friendly first-run hint about the Demucs model download.
+- **`stemguessr.cli.run_ingest_pipeline`** as a public reusable entry point — the CLI's `ingest` command is a thin wrapper around it, and the server thread calls the same function.
+
+### Changed
+
+- `fetchAndUpdateManifest` triggers `loadCurrentTrack` whenever the player transitions from "no playable track" to "has one" — covers initial load, polling-brings-first-track-in, and ran-out-then-rescued in one rule (`wasWithoutPlayable && currentIndex < trackOrder.length`).
+- `init` no longer calls `loadCurrentTrack` directly; it delegates to `fetchAndUpdateManifest`'s transition detection so the same code path serves both initial load and the post-form-submit poll.
+- The HTTP server uses `ThreadingMixIn` so a long-running fetch (e.g. the Spotify embed page) does not block static-asset requests for the running game.
+
+### Verified end-to-end
+
+`stemguessr serve --out ./test_cache --port 8767` → browser navigation → URL pasted into form → `POST /api/ingest` accepted (202) → manifest written progressively → frontend transitions to "Track 1/3 · 4 stems · htdemucs", play button enabled, round label `Round 1 / 4 — drums`. All without ever leaving the browser.
+
 ## [0.1.2] — 2026-05-10
 
 Progressive ingest: the frontend can start playing as soon as the first track is separated, and picks up subsequent tracks as Demucs finishes them.
