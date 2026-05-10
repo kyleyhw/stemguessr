@@ -2,9 +2,30 @@
 
 A music-guessing game built around source-separated stems. Given any *public* Spotify playlist URL, the ingest pipeline parses Spotify's own embed page for the playlist (no auth required), downloads each track's 30-second preview from Spotify's CDN, separates the clip into instrument stems with Demucs, and serves the stems to a static browser frontend that reveals one stem per round of guessing.
 
+## Quickstart
+
+One command from clone to playable. **No Spotify credentials needed** — playlist data and preview URLs come from Spotify's public embed page.
+
+```bash
+# 1. Clone and install (Python 3.12+ required; uv will fetch if missing)
+git clone https://github.com/kyleyhw/stemguessr.git
+cd stemguessr
+uv sync
+
+# 2. Run the server.
+uv run stemguessr serve --out ./cache
+
+# 3. Open http://localhost:8765/ in a Chromium-based browser, paste a
+#    public Spotify playlist URL into the form, and play. The first run
+#    downloads ~250 MB of Demucs weights; subsequent tracks separate in
+#    ~5-15 s on CPU and become playable as soon as they finish.
+```
+
+For non-interactive batch use, the underlying ingest is also exposed as `stemguessr ingest <url> [--out PATH] [--stems {4,6}] [--limit N] [--force-refresh]`. See [`docs/cli.md`](docs/cli.md).
+
 ## Status
 
-**v0.1.3 — 2026-05-10.** `stemguessr serve` runs the whole thing in one command: open the page, paste a Spotify playlist URL, play. Progressive ingest streams tracks in as Demucs separates them; volume slider; no Spotify credentials required. See [`CHANGELOG.md`](CHANGELOG.md) for the release log and [`PROJECT_PLAN.md`](PROJECT_PLAN.md) for the phased build log.
+**v0.1.3 — 2026-05-10.** `stemguessr serve` runs the whole thing in one command: open the page, paste a Spotify playlist URL, play. Progressive ingest streams tracks in as Demucs separates them; album cover on reveal; clickable + draggable waveform scrub; volume slider; no Spotify credentials required. See [`CHANGELOG.md`](CHANGELOG.md) for the release log and [`PROJECT_PLAN.md`](PROJECT_PLAN.md) for the phased build log.
 
 ## System architecture
 
@@ -111,27 +132,6 @@ stemguessr/
 - [`docs/frontend.md`](docs/frontend.md) — game UI architecture, state machine, waveform rendering.
 - [`PROJECT_PLAN.md`](PROJECT_PLAN.md) — phased development plan with status tags.
 - [`CHANGELOG.md`](CHANGELOG.md) — release notes.
-
-## Quickstart
-
-One command from clone to playable. **No Spotify credentials needed** — playlist data and preview URLs come from Spotify's public embed page.
-
-```bash
-# 1. Clone and install (Python 3.12+ required; uv will fetch if missing)
-git clone https://github.com/kyleyhw/stemguessr.git
-cd stemguessr
-uv sync
-
-# 2. Run the server.
-uv run stemguessr serve --out ./cache
-
-# 3. Open http://localhost:8765/ in a Chromium-based browser, paste a
-#    public Spotify playlist URL into the form, and play. The first run
-#    downloads ~250 MB of Demucs weights; subsequent tracks separate in
-#    ~5-15 s on CPU and become playable as soon as they finish.
-```
-
-For non-interactive batch use, the underlying ingest is also exposed as `stemguessr ingest <url> [--out PATH] [--stems {4,6}] [--limit N] [--force-refresh]`. See [`docs/cli.md`](docs/cli.md).
 
 ## Development
 

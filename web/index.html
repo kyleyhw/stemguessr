@@ -47,7 +47,10 @@
         </section>
 
         <section class="player" id="player-section" aria-label="Audio player">
-            <canvas id="waveform" width="800" height="160" aria-hidden="true"></canvas>
+            <div class="player-visual">
+                <canvas id="waveform" width="800" height="200" aria-hidden="true"></canvas>
+                <img id="player-cover" alt="" hidden>
+            </div>
             <div class="controls">
                 <button id="play-btn" type="button" aria-label="Play / pause">▶</button>
                 <p class="round-label" id="round-label">—</p>
@@ -55,6 +58,12 @@
                     <span class="volume-label">vol</span>
                     <input type="range" id="volume-slider" min="0" max="0.25" step="0.005" value="0.1">
                 </label>
+            </div>
+            <div class="reveal-info" id="reveal-info" hidden aria-live="polite">
+                <h2 id="reveal-title">—</h2>
+                <p class="reveal-artists" id="reveal-artists">—</p>
+                <p class="reveal-outcome" id="reveal-outcome">—</p>
+                <button id="next-track-btn" type="button">Next track →</button>
             </div>
         </section>
 
@@ -67,13 +76,6 @@
             <ol class="guess-list" id="guess-list" aria-live="polite"></ol>
         </section>
 
-        <section class="reveal" id="reveal" hidden aria-live="polite">
-            <img id="reveal-cover" class="reveal-cover" alt="" hidden>
-            <h2 id="reveal-title">—</h2>
-            <p class="reveal-artists" id="reveal-artists">—</p>
-            <p class="reveal-outcome" id="reveal-outcome">—</p>
-            <button id="next-track-btn" type="button">Next track →</button>
-        </section>
     </main>
 
     <footer>

@@ -51,12 +51,13 @@ const els = {
     guessForm:      document.getElementById('guess-form'),
     skipBtn:        document.getElementById('skip-btn'),
     guessList:      document.getElementById('guess-list'),
-    reveal:         document.getElementById('reveal'),
-    revealCover:    document.getElementById('reveal-cover'),
+    revealInfo:     document.getElementById('reveal-info'),
     revealTitle:    document.getElementById('reveal-title'),
     revealArtists:  document.getElementById('reveal-artists'),
     revealOutcome:  document.getElementById('reveal-outcome'),
     nextBtn:        document.getElementById('next-track-btn'),
+    playerCover:    document.getElementById('player-cover'),
+    waveformCanvas: document.getElementById('waveform'),
     // Ingest form (visible only when there is no manifest yet, or the
     // manifest is finalised but empty).
     ingestPrompt:   document.getElementById('ingest-prompt'),
@@ -100,7 +101,7 @@ function showIngestPrompt() {
     els.ingestPrompt.hidden = false;
     els.playerSection.hidden = true;
     els.guessSection.hidden = true;
-    els.reveal.hidden = true;
+    clearRevealView();
 
     if (state.manifest && state.manifest.tracks.length > 0) {
         // Pre-fill with the cached playlist's URL so the user can press
@@ -401,7 +402,7 @@ async function loadCurrentTrack() {
     state.guesses = [];
     state.pausedOffset = 0;
     els.guessList.innerHTML = '';
-    els.reveal.hidden = true;
+    clearRevealView();
     els.guessInput.value = '';
     els.guessInput.disabled = false;
     els.skipBtn.disabled = false;
@@ -725,23 +726,38 @@ function advance() {
 function revealAnswer({ won, atRound }) {
     stop();
     const track = state.trackOrder[state.currentIndex];
+
+    // Album cover takes the place of the waveform — same fixed-height slot,
+    // no scroll required to see it. Waveform is hidden until the next track.
     if (track.cover_url) {
-        els.revealCover.src = track.cover_url;
-        els.revealCover.alt = `Album cover for ${track.title}`;
-        els.revealCover.hidden = false;
+        els.playerCover.src = track.cover_url;
+        els.playerCover.alt = `Album cover for ${track.title}`;
+        els.playerCover.hidden = false;
+        els.waveformCanvas.hidden = true;
     } else {
-        els.revealCover.removeAttribute('src');
-        els.revealCover.hidden = true;
+        // No cover — keep the waveform up so the slot isn't empty.
+        els.playerCover.removeAttribute('src');
+        els.playerCover.hidden = true;
+        els.waveformCanvas.hidden = false;
     }
+
     els.revealTitle.textContent = track.title;
     els.revealArtists.textContent = track.artists.join(', ');
     els.revealOutcome.textContent = won
         ? `solved on round ${atRound + 1} of ${state.manifest.stems.length}`
         : 'no win — out of guesses';
-    els.reveal.hidden = false;
+    els.revealInfo.hidden = false;
     els.guessInput.disabled = true;
     els.skipBtn.disabled = true;
     els.playBtn.disabled = false;  // user may want to re-listen
+}
+
+function clearRevealView() {
+    // Restore waveform-driven view between tracks / on form re-show.
+    els.revealInfo.hidden = true;
+    els.playerCover.hidden = true;
+    els.playerCover.removeAttribute('src');
+    els.waveformCanvas.hidden = false;
 }
 
 function nextTrack() {

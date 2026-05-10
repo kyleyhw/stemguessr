@@ -162,9 +162,20 @@ main {
     box-shadow: inset 0 0 0 1px var(--cream);
 }
 
+.player-visual {
+    /* Fixed height so the canvas-vs-cover swap doesn't make the page jump. */
+    height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--ink);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
 #waveform {
     width: 100%;
-    height: 160px;
+    height: 200px;
     background: var(--ink);
     border-radius: 4px;
     display: block;
@@ -173,6 +184,46 @@ main {
        instead of scrolling the page. */
     touch-action: none;
     user-select: none;
+}
+
+#player-cover {
+    display: block;
+    width: 200px;
+    height: 200px;
+    object-fit: cover;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+    border-radius: 4px;
+}
+
+.reveal-info {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--cream-shadow);
+    text-align: center;
+}
+
+.reveal-info h2 {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 800;
+    font-style: italic;
+    font-size: 1.6rem;
+    margin-bottom: 0.3rem;
+    line-height: 1.1;
+    color: var(--oxblood);
+}
+
+.reveal-info .reveal-artists {
+    font-size: 0.95rem;
+    color: var(--ink-soft);
+    margin-bottom: 0.3rem;
+}
+
+.reveal-info .reveal-outcome {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-faint);
+    margin-bottom: 0.9rem;
 }
 
 .controls {
@@ -320,60 +371,6 @@ input[type="text"]:focus {
 .guess-list li.skipped {
     color: var(--ink-faint);
     font-style: italic;
-}
-
-/* Reveal block */
-
-.reveal {
-    background: var(--oxblood);
-    color: var(--cream);
-    padding: 1.5rem;
-    border-radius: var(--radius);
-    text-align: center;
-}
-
-.reveal-cover {
-    display: block;
-    width: 220px;
-    height: 220px;
-    margin: 0 auto 1rem;
-    border-radius: 4px;
-    object-fit: cover;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
-    background: var(--ink);
-}
-
-.reveal h2 {
-    font-family: 'Fraunces', Georgia, serif;
-    font-weight: 800;
-    font-style: italic;
-    font-size: 1.8rem;
-    margin-bottom: 0.4rem;
-    line-height: 1.1;
-}
-
-.reveal-artists {
-    font-size: 0.95rem;
-    opacity: 0.9;
-    margin-bottom: 0.8rem;
-}
-
-.reveal-outcome {
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    margin-bottom: 1rem;
-    opacity: 0.7;
-}
-
-.reveal button {
-    background: var(--cream);
-    color: var(--oxblood);
-    border-color: var(--cream);
-}
-
-.reveal button:hover {
-    background: var(--cream-deep);
 }
 
 /* Footer */
