@@ -4,25 +4,27 @@ A music-guessing game built around source-separated stems. Given any *public* Sp
 
 ## Quickstart
 
-> **Requirements** — Python 3.12+ and [`uv`](https://docs.astral.sh/uv/) on `PATH`. No Spotify credentials.
+No Python toolchain or Spotify credentials required — everything runs locally on your machine.
 
-**1. Install.**
+**Windows (no terminal):** download this repo as a ZIP ([Code → Download ZIP](https://github.com/kyleyhw/stemguessr/archive/refs/heads/main.zip)), unzip, and double-click **`run.bat`**. It installs [`uv`](https://docs.astral.sh/uv/) if missing, starts the server, and the game opens in your browser automatically.
+
+**macOS / any terminal:** install `uv` (one line), then run the game:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh        # macOS/Linux; see run.bat for Windows
+uvx stemguessr serve
+```
+
+Then paste a public Spotify playlist URL into the form and play. The first run downloads the dependencies (~2–3 GB, mostly PyTorch) and ~250 MB of Demucs weights; after that each track separates in ~5–15 s on CPU and becomes playable the moment it finishes. Re-running against the same playlist is a cache hit (no network, no Demucs). Distribution rationale and the PyPI release process are in [`docs/distribution.md`](docs/distribution.md).
+
+**Development install:**
 
 ```bash
 git clone https://github.com/kyleyhw/stemguessr.git
 cd stemguessr
 uv sync
-```
-
-**2. Run the server.**
-
-```bash
 uv run stemguessr serve --out ./cache
 ```
-
-**3. Open <http://localhost:8765/>**, paste a public Spotify playlist URL into the form, and play.
-
-The first invocation downloads ~250 MB of Demucs weights, after which each track separates in ~5–15 s on CPU and becomes playable the moment it finishes. Re-running against the same playlist is a cache hit (no network, no Demucs).
 
 For non-interactive use, `stemguessr ingest <url> [--out PATH] [--stems {4,6}] [--limit N] [--force-refresh]` runs the same pipeline without the server — see [`docs/cli.md`](docs/cli.md).
 
@@ -74,6 +76,9 @@ A full derivation — training objective (L1 + multi-resolution STFT), complex-m
 
 ```
 stemguessr/
+├── .github/
+│   └── workflows/
+│       └── publish.yml  ← PyPI trusted publishing on GitHub release
 ├── .gitignore
 ├── .pre-commit-config.yaml
 ├── .python-version
@@ -83,6 +88,7 @@ stemguessr/
 ├── PROJECT_PLAN.md
 ├── README.md            ← you are here
 ├── pyproject.toml
+├── run.bat              ← Windows one-click launcher
 ├── uv.lock
 ├── docs/
 │   ├── index.md         ← documentation hub
@@ -91,7 +97,8 @@ stemguessr/
 │   ├── separation.md    ← Phase 4: Demucs derivation
 │   ├── manifest.md      ← Phase 5: manifest schema
 │   ├── cli.md           ← Phase 6: CLI reference
-│   └── frontend.md      ← Phase 7: frontend architecture
+│   ├── frontend.md      ← Phase 7: frontend architecture
+│   └── distribution.md  ← Phase 9: packaging & install story
 ├── src/
 │   └── stemguessr/
 │       ├── __init__.py  ← package root (re-exports cli.main)
@@ -99,14 +106,22 @@ stemguessr/
 │       ├── sources.py   ← Phase 3: iTunes/Deezer preview lookup
 │       ├── separate.py  ← Phase 4: Demucs separation wrapper
 │       ├── manifest.py  ← Phase 5: manifest.json builder
-│       └── cli.py       ← Phase 6: stemguessr ingest <url>
+│       ├── cli.py       ← Phase 6: stemguessr ingest <url> / serve
+│       ├── server.py    ← HTTP server (frontend, cache, /api/*)
+│       └── web/         ← Phase 7 frontend (ships inside the wheel)
+│           ├── index.html
+│           ├── styles.css
+│           └── game.js
 ├── tests/
 │   ├── __init__.py
+│   ├── fixtures/
+│   │   └── manifest.json
 │   ├── test_spotify.py
 │   ├── test_sources.py
 │   ├── test_separate.py
 │   ├── test_manifest.py
 │   ├── test_cli.py
+│   ├── test_server.py
 │   ├── test_fixture_manifest.py
 │   └── reports/
 │       ├── phase2_spotify.md
@@ -115,13 +130,10 @@ stemguessr/
 │       ├── phase5_manifest.md
 │       ├── phase6_cli.md
 │       ├── phase7_frontend.md
-│       └── phase8_release.md
-└── web/                 ← Phase 7 frontend
-    ├── index.html
-    ├── styles.css
-    ├── game.js
-    └── fixtures/
-        └── manifest.json
+│       ├── phase8_release.md
+│       ├── ingest_shuffle.md
+│       └── phase9_reset_score_distribution.md
+└── cache/               ← default ingest output (gitignored)
 ```
 
 ## Documentation
@@ -133,6 +145,7 @@ stemguessr/
 - [`docs/manifest.md`](docs/manifest.md) — `manifest.json` schema as the frontend contract.
 - [`docs/cli.md`](docs/cli.md) — `stemguessr ingest <playlist_url>` reference.
 - [`docs/frontend.md`](docs/frontend.md) — game UI architecture, state machine, waveform rendering.
+- [`docs/distribution.md`](docs/distribution.md) — packaging, per-OS install story, PyPI trusted publishing.
 - [`PROJECT_PLAN.md`](PROJECT_PLAN.md) — phased development plan with status tags.
 - [`CHANGELOG.md`](CHANGELOG.md) — release notes.
 

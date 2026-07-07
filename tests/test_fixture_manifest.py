@@ -1,10 +1,10 @@
 """Schema validation for the frontend fixture manifest.
 
-The fixture at ``web/fixtures/manifest.json`` is hand-edited; this test guards
-against drift between it and the schema produced by ``stemguessr.manifest``.
-The frontend (Phase 7) trusts that any manifest with ``version: 1`` matches
-the documented shape, so a malformed fixture would silently break offline
-frontend development without this check.
+The fixture at ``tests/fixtures/manifest.json`` is hand-edited; this test
+guards against drift between it and the schema produced by
+``stemguessr.manifest``. The frontend (Phase 7) trusts that any manifest with
+``version: 1`` matches the documented shape, so a malformed fixture would
+silently break offline frontend development without this check.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-FIXTURE_PATH = Path(__file__).parent.parent / "web" / "fixtures" / "manifest.json"
+FIXTURE_PATH = Path(__file__).parent / "fixtures" / "manifest.json"
 
 
 @pytest.fixture(scope="module")

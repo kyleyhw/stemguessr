@@ -21,6 +21,7 @@ These are written as each phase lands. Placeholders are listed below for navigab
 | 5 | [`manifest.md`](manifest.md) — `manifest.json` schema as the frontend contract | written |
 | 6 | [`cli.md`](cli.md) — `stemguessr ingest <playlist_url>` reference | written |
 | 7 | [`frontend.md`](frontend.md) — game UI architecture, state machine, waveform rendering | written |
+| 9 | [`distribution.md`](distribution.md) — packaging, per-OS install story, PyPI trusted publishing | written |
 
 ## Conventions
 

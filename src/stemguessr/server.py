@@ -17,16 +17,17 @@ import http.server
 import json
 import socketserver
 import threading
+import webbrowser
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-# Resolve the bundled web/ directory at module-import time. Today this is
-# the repository's web/ folder; once the package ships as a wheel we will
-# move web/ under src/stemguessr/ and use importlib.resources here.
-_PACKAGE_DIR = Path(__file__).parent
-_REPO_ROOT = _PACKAGE_DIR.parent.parent
-DEFAULT_WEB_DIR = _REPO_ROOT / "web"
+# The frontend ships inside the package (src/stemguessr/web/), so the wheel
+# is self-contained and `uvx stemguessr serve` works without a repo checkout.
+# Wheels are always installed as real directories (never run zipped), so a
+# plain Path relative to __file__ is sufficient — no importlib.resources
+# machinery needed.
+DEFAULT_WEB_DIR = Path(__file__).parent / "web"
 
 
 class _IngestState:
@@ -161,6 +162,7 @@ def serve_forever(
     port: int = 8765,
     web_dir: Path = DEFAULT_WEB_DIR,
     log: Callable[[str], None] = print,
+    open_browser: bool = True,
 ) -> None:
     """Run the StemGuessr server until interrupted (Ctrl-C).
 
@@ -170,8 +172,12 @@ def serve_forever(
         host: Bind address. Default ``127.0.0.1`` (localhost only).
         port: TCP port.
         web_dir: Source directory for ``index.html``, ``styles.css``,
-            ``game.js``. Defaults to the repository's ``web/`` folder.
+            ``game.js``. Defaults to the package's bundled ``web/`` folder.
         log: Sink for one-line progress messages.
+        open_browser: Open the game in the default browser once the server
+            socket is bound. This is the zero-instruction path for the
+            ``run.bat`` / ``uvx`` distribution; pass False (CLI:
+            ``--no-browser``) for headless or development use.
     """
     state = _IngestState()
     handler_cls = _make_handler(
@@ -181,6 +187,12 @@ def serve_forever(
         log=log,
     )
     with _ThreadedHTTPServer((host, port), handler_cls) as httpd:
+        if open_browser:
+            # The socket is bound and listening as soon as the server object
+            # exists — a browser connecting now queues in the listen backlog
+            # and is served the moment serve_forever() starts, so no
+            # port-polling is needed.
+            webbrowser.open(f"http://{host}:{port}/")
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:

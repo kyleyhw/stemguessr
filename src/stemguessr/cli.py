@@ -305,12 +305,20 @@ def serve(
         int,
         typer.Option("--port", "-p", help="TCP port to listen on."),
     ] = 8765,
+    no_browser: Annotated[
+        bool,
+        typer.Option(
+            "--no-browser",
+            help="Do not open the game in the default browser on startup.",
+        ),
+    ] = False,
 ) -> None:
     """Run the StemGuessr web server.
 
     Hosts the static frontend, serves the cache contents, and exposes
     ``POST /api/ingest`` so the browser can paste a Spotify playlist URL
-    and start ingest without going back to the terminal.
+    and start ingest without going back to the terminal. Opens the game
+    in the default browser unless ``--no-browser`` is given.
     """
     from stemguessr.server import serve_forever
 
@@ -318,7 +326,13 @@ def serve(
     typer.echo(f"StemGuessr serving on http://{host}:{port}/")
     typer.echo("Open the URL, paste a public Spotify playlist URL, and play.")
     typer.echo("Press Ctrl-C to stop.")
-    serve_forever(cache_dir=out, host=host, port=port, log=typer.echo)
+    serve_forever(
+        cache_dir=out,
+        host=host,
+        port=port,
+        log=typer.echo,
+        open_browser=not no_browser,
+    )
 
 
 def main() -> None:

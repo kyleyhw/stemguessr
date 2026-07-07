@@ -1,0 +1,26 @@
+# Publish stemguessr to PyPI on every GitHub release, via trusted
+# publishing (OIDC) — no API token is stored in this repository. PyPI must
+# be configured once with this repo/workflow/environment as a trusted
+# publisher; the one-time setup steps are in docs/distribution.md.
+name: Publish to PyPI
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      # Mint the OIDC token that PyPI exchanges for upload rights.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Build sdist and wheel
+        run: uv build
+      - name: Publish to PyPI
+        # uv detects the GitHub Actions OIDC environment and uses trusted
+        # publishing automatically; no credentials are passed.
+        run: uv publish
