@@ -182,14 +182,14 @@ class TestHappyPath:
         self, stub_pipeline: StubState, tmp_path: Path
     ) -> None:
         """The CLI must pass each track's preview_url straight through to
-        download_preview, keyed by the track's Spotify ID.
+        download_preview, keyed by the track's Spotify ID. Processing order
+        is shuffled, so compare as sets rather than positionally.
         """
         runner.invoke(app, ["ingest", VALID_PLAYLIST_URL, "--out", str(tmp_path)])
         assert len(stub_pipeline.download_calls) == 2
-        for i, call in enumerate(stub_pipeline.download_calls):
-            track = stub_pipeline.tracks[i]
-            assert call["url"] == track.preview_url
-            assert call["cache_key"] == track.spotify_id
+        expected = {(t.preview_url, t.spotify_id) for t in stub_pipeline.tracks}
+        got = {(c["url"], c["cache_key"]) for c in stub_pipeline.download_calls}
+        assert got == expected
 
 
 class TestSkipping:
@@ -211,6 +211,45 @@ class TestSkipping:
         )
         assert len(manifest["tracks"]) == 1
         assert manifest["tracks"][0]["spotify_id"] == "a"
+
+
+class TestShuffledOrder:
+    def test_processing_order_follows_shuffle(
+        self,
+        stub_pipeline: StubState,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The pipeline must process tracks in the order produced by
+        random.shuffle, not playlist order — otherwise the first separated
+        (and hence first playable) track is always the playlist's first.
+        Replacing shuffle with a deterministic in-place reversal makes the
+        expected order exact; five distinct IDs are used so a reversal
+        cannot be mistaken for identity (as it could with 0 or 1 tracks).
+        """
+        stub_pipeline.tracks = [_make_track(f"id{i}") for i in range(5)]
+        monkeypatch.setattr("stemguessr.cli.random.shuffle", lambda seq: seq.reverse())
+        result = runner.invoke(
+            app, ["ingest", VALID_PLAYLIST_URL, "--out", str(tmp_path)]
+        )
+        assert result.exit_code == 0
+        got = [c["cache_key"] for c in stub_pipeline.download_calls]
+        assert got == [f"id{i}" for i in reversed(range(5))]
+
+    def test_playlist_track_list_not_mutated(
+        self, stub_pipeline: StubState, tmp_path: Path
+    ) -> None:
+        """The shuffle must operate on a copy: the list returned by
+        fetch_playlist_tracks (aliased by the stub) must keep its original
+        playlist order after the run.
+        """
+        stub_pipeline.tracks = [_make_track(f"id{i}") for i in range(5)]
+        original = list(stub_pipeline.tracks)
+        result = runner.invoke(
+            app, ["ingest", VALID_PLAYLIST_URL, "--out", str(tmp_path)]
+        )
+        assert result.exit_code == 0
+        assert stub_pipeline.tracks == original
 
 
 class TestLimit:

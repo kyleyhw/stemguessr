@@ -16,6 +16,7 @@ Public entry points:
 from __future__ import annotations
 
 import dataclasses
+import random
 import shutil
 from collections.abc import Callable
 from importlib.metadata import PackageNotFoundError
@@ -176,6 +177,17 @@ def run_ingest_pipeline(
         log(f"  {len(tracks)} tracks (limited from playlist by --limit).")
     else:
         log(f"  {len(tracks)} tracks found.")
+
+    # Shuffle the processing order (on a copy, so the caller's list is not
+    # mutated). The manifest is written progressively and the frontend
+    # appends tracks in arrival order — its own shuffle only covers tracks
+    # present at the first fetch — so ingestion order IS the effective play
+    # order during a live ingest. Without this, the first playable track
+    # would always be the playlist's first track. Shuffling after the
+    # --limit slice preserves that flag's "first N tracks" semantics.
+    tracks = list(tracks)
+    random.shuffle(tracks)
+    log("  processing order shuffled.")
 
     expected = len(tracks)
     entries: list[TrackBuildEntry] = []

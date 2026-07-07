@@ -281,8 +281,10 @@ async function fetchAndUpdateManifest(opts = {}) {
         state.trackOrder = shuffled;
         for (const t of shuffled) state.knownTrackIds.add(t.id);
     } else if (newTracks.length > 0) {
-        // Incremental — append in playlist order without disturbing the
-        // existing shuffle of already-known tracks.
+        // Incremental — append in arrival (ingestion) order without
+        // disturbing the existing shuffle of already-known tracks. The
+        // backend shuffles its processing order, so arrivals are already
+        // random rather than playlist-ordered.
         state.trackOrder.push(...newTracks);
         for (const t of newTracks) state.knownTrackIds.add(t.id);
     }

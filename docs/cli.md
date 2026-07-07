@@ -26,8 +26,9 @@ flowchart TD
     Tracks["List of Track<br/>(spotify_id, title, artists,<br/>duration_ms, preview_url)"]
     Limit{"--limit N<br/>given?"}
     Cap[take first N tracks]
+    Shuffle["random.shuffle<br/>(randomise processing order)"]
 
-    PerTrack["per track<br/>(in playlist order)"]
+    PerTrack["per track<br/>(in shuffled order)"]
     HasPreview{preview_url<br/>present?}
     Skip[skip + warn on stderr]
     Force{"--force-refresh?"}
@@ -39,8 +40,9 @@ flowchart TD
     Manifest["build_manifest(entries)<br/>→ cache/manifest.json"]
 
     URL --> Parse --> Embed --> Tracks --> Limit
-    Limit -- yes --> Cap --> PerTrack
-    Limit -- no --> PerTrack
+    Limit -- yes --> Cap --> Shuffle
+    Limit -- no --> Shuffle
+    Shuffle --> PerTrack
     PerTrack --> HasPreview
     HasPreview -- no --> Skip
     HasPreview -- yes --> Force
@@ -51,6 +53,8 @@ flowchart TD
 
 The whole pipeline is a single linear function; per-track failures (Spotify did not provide a preview URL) are reported on stderr and skipped without aborting the run.
 
+**Why the shuffle happens here, not (only) in the frontend.** The manifest is written progressively — one rewrite per separated track — and the frontend appends newly arrived tracks in arrival order (its own Fisher–Yates shuffle covers only the tracks present at its *first* manifest fetch, which during a live ingest is typically a single track). Ingestion order is therefore the effective play order, and without a server-side shuffle the first playable track would always be the playlist's first track. `random.shuffle` runs *after* the `--limit` slice so that flag keeps its documented "first N tracks of the playlist" semantics (deterministic track selection, and hence cache-friendly smoke tests) while the processing order of the selection remains random.
+
 ## Arguments
 
 | Name | Type | Required | Default | Description |
@@ -59,7 +63,7 @@ The whole pipeline is a single linear function; per-track failures (Spotify did 
 | `--out` / `-o` | path | no | `./cache` | Cache root — receives `previews/`, `stems/`, `manifest.json`. Created if missing. |
 | `--stems` | int | no | `4` | `4` (htdemucs) or `6` (htdemucs_6s). Any other value → exit code 1. |
 | `--force-refresh` | bool | no | `false` | Delete cached preview and stem files for **every** track in the playlist before re-processing. |
-| `--limit` / `-n` | int | no | _none_ | Process only the first N tracks. Useful for quick smoke tests against large playlists. |
+| `--limit` / `-n` | int | no | _none_ | Process only the first N tracks of the playlist (selection happens before the order shuffle). Useful for quick smoke tests against large playlists. |
 
 ## Environment variables
 
@@ -158,6 +162,7 @@ Coverage:
 - Track with `isrc=None` → reported and skipped, manifest contains only the survivor.
 - Track with no preview from any source → reported and skipped.
 - `--force-refresh` → stale cached preview and stem files are overwritten.
+- Processing order follows `random.shuffle` (asserted deterministically by stubbing the shuffle with an in-place reversal), and the fetched track list itself is never mutated by the shuffle.
 
 Run the tests:
 
@@ -165,4 +170,4 @@ Run the tests:
 uv run pytest tests/test_cli.py -v
 ```
 
-The latest test report is at [`../tests/reports/phase6_cli.md`](../tests/reports/phase6_cli.md).
+Test reports: [`../tests/reports/phase6_cli.md`](../tests/reports/phase6_cli.md) (original orchestration suite) and [`../tests/reports/ingest_shuffle.md`](../tests/reports/ingest_shuffle.md) (shuffled ingest order).
