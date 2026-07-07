@@ -425,6 +425,36 @@ input[type="text"]:focus {
     display: block;
 }
 
+/* Score panel contents: a heading per solve stage, song titles beneath. */
+
+.score-group {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--oxblood);
+    font-weight: 700;
+    margin-top: 0.5rem;
+}
+
+.score-group:first-child {
+    margin-top: 0;
+}
+
+.score-song {
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    padding-left: 0.6rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.score-empty {
+    font-size: 0.8rem;
+    color: var(--ink-faint);
+    font-style: italic;
+}
+
 /* Footer */
 
 footer {

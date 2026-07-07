@@ -30,6 +30,12 @@ const state = {
     rafId: null,           // requestAnimationFrame id for waveform redraw loop
     knownTrackIds: new Set(),  // ids of tracks already in trackOrder
     pollTimer: null,       // setTimeout handle for the next manifest poll
+    // Per-track outcomes for the score HUD, recorded at reveal time:
+    // {title, artists, stage} with stage = 1-based round the track was
+    // solved on, or null for a miss (out of guesses). Tracks abandoned via
+    // "Next track" before any reveal are not scored. Session-scoped —
+    // deliberately not persisted; a reload starts a fresh scoreboard.
+    results: [],
     // Pre-computed per-pixel min/max for the *currently active* stem mix —
     // recomputed at every round advance (and on initial track load), then
     // referenced by the draw routines on every animation frame. Caching it
@@ -75,6 +81,8 @@ const els = {
     playerSection:  document.getElementById('player-section'),
     guessSection:   document.getElementById('guess-section'),
     resetBtn:       document.getElementById('reset-btn'),
+    scoreChip:      document.getElementById('score-chip'),
+    scorePanel:     document.getElementById('score-panel'),
 };
 
 // ============================================================
@@ -83,6 +91,7 @@ const els = {
 
 async function init() {
     wireEvents();
+    updateScoreHud();
 
     // Probe for an existing manifest. We use it only to pre-fill the form
     // and surface a "you have N tracks cached" hint — we do NOT populate
@@ -228,6 +237,9 @@ async function submitIngestForm(event) {
     state.trackOrder = [];
     state.knownTrackIds = new Set();
     state.currentIndex = 0;
+    // A new playlist is a new game — zero the scoreboard.
+    state.results = [];
+    updateScoreHud();
 
     hideIngestPrompt();
     els.status.textContent = 'Ingest started — waiting for first track…';
@@ -815,6 +827,15 @@ function revealAnswer({ won, atRound }) {
     els.revealOutcome.textContent = won
         ? `solved on round ${atRound + 1} of ${state.manifest.stems.length}`
         : 'no win — out of guesses';
+
+    // Score bookkeeping: the reveal is the single point where a track's
+    // outcome becomes final, so it is the single point that records it.
+    state.results.push({
+        title: track.title,
+        artists: track.artists.join(', '),
+        stage: won ? atRound + 1 : null,
+    });
+    updateScoreHud();
     els.revealInfo.hidden = false;
     els.guessInput.disabled = true;
     els.skipBtn.disabled = true;
@@ -837,6 +858,60 @@ function clearRevealView() {
 function nextTrack() {
     state.currentIndex++;
     loadCurrentTrack();
+}
+
+// ============================================================
+// Score HUD — chip shows solved/played; hover panel breaks results
+// down by the stage each track was solved on
+// ============================================================
+
+function updateScoreHud() {
+    const played = state.results.length;
+    const solved = state.results.filter((r) => r.stage !== null).length;
+    els.scoreChip.textContent = `score ${solved}/${played}`;
+
+    els.scorePanel.innerHTML = '';
+    if (played === 0) {
+        const p = document.createElement('p');
+        p.className = 'score-empty';
+        p.textContent = 'no completed tracks yet';
+        els.scorePanel.appendChild(p);
+        return;
+    }
+
+    // One group per solve stage (1..N), then "missed". maxStage falls back
+    // to the largest recorded stage so results survive a manifest teardown
+    // (e.g. while the ingest form is showing).
+    const nStems = state.manifest ? state.manifest.stems.length : 0;
+    const maxStage = Math.max(
+        nStems, ...state.results.map((r) => r.stage ?? 0),
+    );
+    const groups = [];
+    for (let s = 1; s <= maxStage; s++) {
+        groups.push({
+            label: `stage ${s}`,
+            items: state.results.filter((r) => r.stage === s),
+        });
+    }
+    groups.push({
+        label: 'missed',
+        items: state.results.filter((r) => r.stage === null),
+    });
+
+    for (const g of groups) {
+        if (g.items.length === 0) continue;  // keep the panel compact
+        const head = document.createElement('p');
+        head.className = 'score-group';
+        head.textContent = `${g.label} · ${g.items.length}`;
+        els.scorePanel.appendChild(head);
+        for (const r of g.items) {
+            const row = document.createElement('p');
+            row.className = 'score-song';
+            row.textContent = r.title;
+            row.title = `${r.title} — ${r.artists}`;  // full text on hover
+            els.scorePanel.appendChild(row);
+        }
+    }
 }
 
 // ============================================================
@@ -887,6 +962,8 @@ async function resetGame() {
     state.buffersByUrl = new Map();
     state.cachedWaveform = null;
     state.pausedOffset = 0;
+    state.results = [];
+    updateScoreHud();
     els.guessList.innerHTML = '';
 
     showIngestPrompt();

@@ -23,6 +23,12 @@
     <!-- HUD: fixed top-right chip cluster. Deliberately tiny so the main
          UI is unchanged; panels expand on hover/focus only. -->
     <div class="hud">
+        <div class="hud-item">
+            <button class="hud-chip" id="score-chip" type="button"
+                    aria-haspopup="true"
+                    title="Hover for the per-stage breakdown">score 0/0</button>
+            <div class="hud-panel" id="score-panel" role="tooltip"></div>
+        </div>
         <button class="hud-chip" id="reset-btn" type="button"
                 title="Delete the ingested cache and choose a new playlist">↺ reset</button>
     </div>
