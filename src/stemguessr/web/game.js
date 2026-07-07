@@ -354,6 +354,18 @@ function wireEvents() {
     els.ingestForm.addEventListener('submit', submitIngestForm);
     els.resetBtn.addEventListener('click', resetGame);
 
+    // Enter always triggers the primary (red) action for the current state.
+    // The guess and ingest forms already handle Enter natively via form
+    // submission; the only gap is the reveal state, where the primary
+    // action is "Next track" and no form has focus. preventDefault also
+    // suppresses the browser's Enter→click synthesis when the Next button
+    // itself is focused, so the advance fires exactly once.
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' || els.revealInfo.hidden) return;
+        e.preventDefault();
+        nextTrack();
+    });
+
     // Initialise slider to the documented default; user adjustments live-update
     // the master gain.
     els.volumeSlider.value = String(state.volume);
