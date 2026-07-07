@@ -4,6 +4,25 @@ All notable changes to StemGuessr are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] — 2026-07-07
+
+Friend-proof distribution, a one-click reset, and a score tracker.
+
+### Added
+
+- **Self-contained wheel.** The frontend moved into the package (`src/stemguessr/web/`), so the built wheel needs no repo checkout: once published, `uvx stemguessr serve` is the whole install story. The dev manifest fixture moved to `tests/fixtures/` so it stays out of the wheel.
+- **`run.bat`** — Windows one-click launcher: installs `uv` if missing, starts the server; first run downloads dependencies (~2–3 GB, mostly PyTorch) and Demucs weights.
+- **Browser auto-open.** `stemguessr serve` opens the game in the default browser once the socket is bound; `--no-browser` opts out.
+- **`POST /api/reset`** — clears `manifest.json`, `stems/`, `previews/` from the cache; 409 while an ingest is in flight. Frontend `↺ reset` chip (top-right HUD) gates it behind an "Are you sure?" confirm, then returns to the playlist form.
+- **Score tracker.** A `score n/m` HUD chip records each track's outcome at reveal time; hovering expands a per-stage breakdown (which songs were solved with how many stems audible, plus misses). Session-scoped; zeroed on reset or a new ingest.
+- **Enter = primary action.** The reveal card now advances to the next track on Enter, matching the forms' native Enter behaviour, so the whole game is playable from the keyboard.
+- **PyPI trusted-publishing workflow** (`.github/workflows/publish.yml`) triggered by GitHub releases, plus `docs/distribution.md` documenting the install story and the one-time PyPI setup.
+- **`tests/test_server.py`** — the reset endpoint and static routing exercised over real HTTP on an ephemeral port.
+
+### Changed
+
+- **Ingest order is shuffled server-side** (after the `--limit` slice), so the first playable track during a live ingest is random rather than always the playlist's first track — the frontend's own shuffle only covers tracks present at its first manifest fetch.
+
 ## [0.1.3] — 2026-05-10
 
 The whole pipeline is now driven from the browser. `stemguessr serve` starts an HTTP server that hosts the frontend, serves the cache, and exposes `POST /api/ingest`; the page shows a "paste a Spotify playlist URL" form on first visit, accepts it, kicks off ingest in a background thread, and starts playing as soon as the first track is separated.

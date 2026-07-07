@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
-from stemguessr.cli import app
+from stemguessr.cli import __version__, app
 from stemguessr.manifest import MANIFEST_FILENAME
 from stemguessr.separate import MODEL_STEMS
 from stemguessr.spotify import Track
@@ -122,8 +122,9 @@ class TestVersion:
     def test_version_flag_prints_version_and_exits(self) -> None:
         result = runner.invoke(app, ["--version"])
         assert result.exit_code == 0
-        assert "stemguessr" in result.stdout
-        assert "0.1." in result.stdout  # 0.1.x
+        # Compare against the package's own version rather than a pinned
+        # string, so version bumps do not break the test.
+        assert f"stemguessr {__version__}" in result.stdout
 
 
 class TestArgumentValidation:

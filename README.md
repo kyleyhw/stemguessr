@@ -30,7 +30,7 @@ For non-interactive use, `stemguessr ingest <url> [--out PATH] [--stems {4,6}] [
 
 ## Status
 
-**v0.1.3 — 2026-05-10.** `stemguessr serve` runs the whole thing in one command: open the page, paste a Spotify playlist URL, play. Progressive ingest streams tracks in as Demucs separates them; album cover on reveal; clickable + draggable waveform scrub; volume slider; no Spotify credentials required. See [`CHANGELOG.md`](CHANGELOG.md) for the release log and [`PROJECT_PLAN.md`](PROJECT_PLAN.md) for the phased build log.
+**v0.2.0 — 2026-07-07.** Friend-proof distribution (self-contained wheel, `run.bat`, browser auto-open), a confirm-gated reset button, a hover-expand score tracker, Enter-driven play, and server-side shuffle of ingest order. Everything from v0.1.3 still holds: `stemguessr serve` runs the whole thing in one command, progressive ingest streams tracks in as Demucs separates them, no Spotify credentials required. See [`CHANGELOG.md`](CHANGELOG.md) for the release log and [`PROJECT_PLAN.md`](PROJECT_PLAN.md) for the phased build log.
 
 ## System architecture
 

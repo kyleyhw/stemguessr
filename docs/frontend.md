@@ -1,6 +1,6 @@
-    # Frontend Architecture
+# Frontend Architecture
 
-This document describes the static browser frontend in [`web/`](../web/): a single HTML file, a single CSS file, and a single ES module of vanilla JavaScript. There is no framework, no bundler, and no build step.
+This document describes the static browser frontend in [`src/stemguessr/web/`](../src/stemguessr/web/): a single HTML file, a single CSS file, and a single ES module of vanilla JavaScript. There is no framework, no bundler, and no build step. The directory lives inside the package so the built wheel is self-contained — see [`distribution.md`](distribution.md).
 
 ## Why no framework
 
@@ -9,22 +9,16 @@ The frontend has one screen, three sections (player, guess form, reveal), and a 
 ## File layout
 
 ```
-web/
-├── index.html         ← semantic markup, three top-level <section>s
+src/stemguessr/web/
+├── index.html         ← semantic markup, three top-level <section>s + HUD
 ├── styles.css         ← cream / oxblood / ink palette; Fraunces + JetBrains Mono
-├── game.js            ← module: state, lifecycle, playback, guessing, render
-└── fixtures/
-    └── manifest.json  ← schema-correct fake manifest for development / review
+└── game.js            ← module: state, lifecycle, playback, guessing, render
 ```
 
-To run the game, copy these four files into the cache directory produced by `stemguessr ingest` (so they live alongside `manifest.json` and `stems/`), then serve the directory:
+To run the game, `stemguessr serve` hosts these files together with the cache contents (`manifest.json`, `stems/`, `previews/`) under one origin and opens the browser:
 
 ```bash
-stemguessr ingest "https://open.spotify.com/playlist/..." --out ./cache
-cp web/index.html web/styles.css web/game.js ./cache/
-cd ./cache
-python -m http.server 8000
-# open http://localhost:8000/
+stemguessr serve --out ./cache
 ```
 
 ## Game flow
@@ -50,7 +44,7 @@ flowchart TD
     Advance[k ← k + 1]
     CheckRound{k &lt; N?}
 
-    Reveal["REVEAL<br/>show title + artists<br/>show outcome (solved on round k+1 / no win)<br/>disable guess + skip<br/>show Next track →"]
+    Reveal["REVEAL<br/>show title + artists + cover<br/>show outcome (solved on round k+1 / no win)<br/>record outcome on the score HUD<br/>disable guess + skip<br/>show Next track → (or press ⏎)"]
     NextI[i ← i + 1]
     CheckPlaylist{i &lt; tracks.length?}
     Complete["PLAYLIST_COMPLETE<br/>🎉 status; controls disabled"]
@@ -71,9 +65,24 @@ flowchart TD
 
 Runtime state lives in the single `state` object at the top of `game.js`; the rest of the file is functions that read and mutate it. There is no two-way data binding and no re-render loop — the DOM is updated imperatively at the few transition points that need it.
 
+### Keyboard: Enter is always the primary action
+
+Enter triggers whichever "red" (primary) button the current state shows. The guess and ingest forms get this natively from HTML form submission; the reveal state — where no form has focus — gets it from a document-level `keydown` handler that fires `nextTrack()` whenever the reveal card is visible. The handler calls `preventDefault()`, which also suppresses the browser's Enter→click synthesis when the *Next track* button itself is focused, so the advance fires exactly once.
+
+### Score HUD (hover to expand)
+
+A fixed top-right chip cluster keeps the main UI unchanged while exposing two controls:
+
+- **`score n/m`** — `n` tracks solved out of `m` completed. Hovering (or keyboard-focusing, via `:focus-within`) expands a panel that groups song titles by the stage each was solved on (stage $k$ = solved with $k$ stems audible), plus a *missed* group. Outcomes are recorded at reveal time — the single point where a track's result becomes final — so tracks abandoned with *Next track* before any reveal are not scored. The scoreboard is session-scoped by design (a reload starts fresh); it is zeroed on reset and when a new ingest begins.
+- **`↺ reset`** — described below.
+
+### Reset
+
+The reset chip returns the game to the paste-a-playlist form after a native `confirm()` "Are you sure?" gate (modal, keyboard-accessible, zero markup — the minimal implementation of a destructive-action guard). On confirmation the client calls `POST /api/reset` — the server deletes `manifest.json`, `stems/`, and `previews/` from the cache, refusing with HTTP 409 while an ingest is in flight — then tears down all manifest-derived client state (audio, poll timer, decoded buffers, scoreboard) and shows the ingest prompt. A cancelled dialog is a strict no-op.
+
 ### Progressive ingest
 
-When the CLI is still ingesting (`manifest.complete === false`), the frontend polls `manifest.json` every **2 seconds** until `complete` flips to `true`. New tracks (identified by `id`) are appended to `state.trackOrder` *in playlist order*, without reshuffling the tracks already there — the player's shuffle is preserved.
+When the CLI is still ingesting (`manifest.complete === false`), the frontend polls `manifest.json` every **2 seconds** until `complete` flips to `true`. New tracks (identified by `id`) are appended to `state.trackOrder` *in arrival order*, without reshuffling the tracks already there — the player's shuffle is preserved. Arrival order is itself random: the backend shuffles its processing order before ingesting (see [`cli.md`](cli.md)), because during a live ingest the frontend's own Fisher–Yates shuffle only ever covers the tracks present at the first fetch — typically a single track — and ingestion order would otherwise become the effective play order.
 
 Two transition cases that the polling handles explicitly:
 
@@ -112,14 +121,11 @@ We could bake the active mix into a fresh AudioBuffer per round and play that si
 
 ## Waveform visualisation
 
-The canvas at the top of the player draws the *first active stem's* waveform — a classic per-pixel min/max amplitude plot of channel 0, rendered to a 800 × 160 px canvas. During playback, a vertical cursor line is overlaid at the playhead position, advanced via `requestAnimationFrame`.
+The canvas at the top of the player draws the waveform of the *summed active-stem mix* (channel 0 of every currently audible stem, added sample-wise and peak-normalised) — a classic per-pixel min/max amplitude plot, rendered to an 800 × 200 px canvas. The plot therefore grows as rounds reveal more stems, matching what the ear hears. During playback, a vertical cursor line is overlaid at the playhead position, advanced via `requestAnimationFrame`; the summed min/max envelope is cached per round so per-frame redraws do not re-scan millions of samples.
 
-This is intentionally simple:
+This is intentionally simple: we do **not** use [`AnalyserNode`](https://developer.mozilla.org/en-US/docs/Web/API/AnalyserNode) for a live spectrogram. The clip is 30 s of pre-known audio; rendering once from the AudioBuffers is more efficient and visually steadier than analyser-driven redraws.
 
-- We do **not** mix all active stems' waveforms. The first stem suffices as a visual anchor; the audio output already mixes everything.
-- We do **not** use [`AnalyserNode`](https://developer.mozilla.org/en-US/docs/Web/API/AnalyserNode) for a live spectrogram. The clip is 30 s of pre-known audio; rendering once from the AudioBuffer is more efficient and visually steadier than analyser-driven redraws.
-
-Algorithmically, for a buffer of $N$ samples drawn into a canvas of width $W$:
+Algorithmically, for a summed signal of $N$ samples drawn into a canvas of width $W$:
 
 $$
 s = \left\lceil \frac{N}{W} \right\rceil, \quad
@@ -174,13 +180,11 @@ When the manifest fetch fails or the schema is wrong, the status line shows a de
 
 ## Fixtures
 
-[`web/fixtures/manifest.json`](../web/fixtures/manifest.json) is a schema-correct fake manifest with two tracks pointing at non-existent stem URLs. It is **not** runnable (the audio fetches will 404), but it is useful for code review of the manifest reader and for offline frontend development with a debugger that intercepts `fetch`.
-
-A future enhancement is a `stemguessr serve` command that copies `web/*` next to `manifest.json` and starts an HTTP server, removing the manual `cp` step.
+[`tests/fixtures/manifest.json`](../tests/fixtures/manifest.json) is a schema-correct fake manifest with two tracks pointing at non-existent stem URLs. It is **not** runnable (the audio fetches will 404), but it is useful for code review of the manifest reader and for offline frontend development with a debugger that intercepts `fetch`. It lives under `tests/` (not inside the package) so it does not ship in the wheel; `tests/test_fixture_manifest.py` guards it against schema drift.
 
 ## Testing
 
-The frontend has no automated tests in the current phase; it is exercised manually against ingested playlists. End-to-end coverage is **Phase 8** (Integration & Polish): a Playwright run against a live ingest fixture, gating on render correctness and game-loop progression.
+The frontend has no automated unit tests; it is exercised end-to-end with Playwright against a cached playlist, covering the guess loop, reveal, score HUD, reset (both confirm and cancel paths), and Enter-key behaviour. The latest run is documented in [`../tests/reports/phase9_reset_score_distribution.md`](../tests/reports/phase9_reset_score_distribution.md).
 
 ## References
 

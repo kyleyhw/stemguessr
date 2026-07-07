@@ -80,3 +80,18 @@ Status tags: `[completed]`, `[in-progress]`, `[pending]`. Updated live as work p
 51. [deferred] Cross-browser smoke test (deferred — manual fixture-based smoke completed in Phase 7; Playwright deferred to v0.2.0).
 52. [completed] README finalisation: Quickstart section with concrete commands, full doc index, license reference, status banner.
 53. [completed] Add `--version` flag, `LICENSE` (MIT), `CHANGELOG.md`; tag `v0.1.0`.
+
+## Phase 9: Distribution, Reset & Score Tracker (v0.2.0)
+
+54. [completed] Self-contained package: move `web/` → `src/stemguessr/web/` so the wheel ships the frontend; resolve via `Path(__file__).parent / "web"` in `server.py`.
+    - [completed] Relocate the dev fixture to `tests/fixtures/manifest.json` (test asset — must not ship in the wheel).
+    - [completed] Build wheel; verify static assets are included and `DEFAULT_WEB_DIR` resolves from an installed wheel.
+55. [in-progress] Zero-hassle launch for friends' machines (all processing stays local):
+    - [completed] `run.bat` — Windows double-click launcher (auto-installs uv); `serve` opens the browser itself once the socket is bound (`--no-browser` opts out).
+    - [completed] GitHub Actions trusted-publishing workflow (`.github/workflows/publish.yml`) for PyPI releases.
+    - [completed] `docs/distribution.md` + README quickstart with per-OS one-liners (`uvx stemguessr serve`).
+    - [pending] PyPI project creation + trusted-publisher registration (manual, owner-only step) and first `v0.2.0` GitHub release.
+56. [completed] Reset workflow: `POST /api/reset` (409 while ingest in flight; clears `manifest.json`, `stems/`, `previews/`), frontend `↺ reset` chip with are-you-sure confirmation returning to the playlist form; `tests/test_server.py`.
+57. [completed] Score tracker: per-track outcomes recorded at reveal (solved-at-stage-k or missed); `score n/m` chip with hover-expand panel grouping songs by solve stage. UI delta limited to a two-chip top-right cluster.
+58. [completed] Enter mirrors the primary action: reveal card advances to the next track on Enter (forms already submit natively).
+59. [completed] Docs, CHANGELOG 0.2.0, version bump, test report, Playwright end-to-end verification (game flow unchanged; reset and score exercised in a scratch cache).

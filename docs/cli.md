@@ -78,14 +78,16 @@ Hosts the frontend and the cache, and exposes a `POST /api/ingest` endpoint so a
 | `--out` / `-o` | `./cache` | Cache root the server reads from and writes into. |
 | `--host` | `127.0.0.1` | Bind address. The localhost default keeps the server private to the machine. |
 | `--port` / `-p` | `8765` | TCP port. |
+| `--no-browser` | off | Do not open the game in the default browser on startup. The default auto-open is what makes the `run.bat` / `uvx` distribution zero-instruction (see [`distribution.md`](distribution.md)); the flag exists for headless and development use. |
 
 Routes:
 
 | Method | Path | Behaviour |
 |--------|------|-----------|
-| GET | `/`, `/index.html`, `/styles.css`, `/game.js` | Static frontend, served from the package's `web/` directory. |
+| GET | `/`, `/index.html`, `/styles.css`, `/game.js` | Static frontend, served from the package's bundled `web/` directory. |
 | GET | `/manifest.json`, `/stems/*`, `/previews/*` | Cache contents, served from `--out`. |
 | POST | `/api/ingest` | JSON body: `{"playlist_url": "...", "n_stems": 4, "limit": null}`. Starts an ingest run in a daemon thread and returns 202. Concurrent calls while a run is in flight return 409 Conflict. |
+| POST | `/api/reset` | Deletes `manifest.json`, `stems/`, and `previews/` from `--out` and returns 200, so the frontend can offer a clean "start over" path. Returns 409 while an ingest is in flight (the ingest thread has no safe cancellation point and would re-create the files mid-delete). Idempotent: resetting an empty cache is 200. |
 
 The server is single-flight: only one ingest runs at a time. Cancellation is best-effort — closing the server with Ctrl-C terminates the daemon thread; the `try / finally` in `run_ingest_pipeline` still writes a `complete: true` manifest with whatever entries had been separated.
 
