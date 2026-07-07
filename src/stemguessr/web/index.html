@@ -20,6 +20,13 @@
         <p class="status" id="status-line">Loading…</p>
     </header>
 
+    <!-- HUD: fixed top-right chip cluster. Deliberately tiny so the main
+         UI is unchanged; panels expand on hover/focus only. -->
+    <div class="hud">
+        <button class="hud-chip" id="reset-btn" type="button"
+                title="Delete the ingested cache and choose a new playlist">↺ reset</button>
+    </div>
+
     <main>
         <section class="ingest-prompt" id="ingest-prompt" hidden aria-label="Ingest a playlist">
             <h2>Choose a playlist</h2>

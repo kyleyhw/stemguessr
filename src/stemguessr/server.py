@@ -2,11 +2,14 @@
 
 Hosts the static frontend, serves the cache contents (manifest.json, stems/*,
 previews/*) under the same origin, and exposes ``POST /api/ingest`` so the
-browser can kick off an ingest run without dropping back to the terminal.
+browser can kick off an ingest run without dropping back to the terminal,
+plus ``POST /api/reset`` so it can clear the cache and return to the
+playlist form.
 
 A single ingest is allowed at a time; concurrent ``/api/ingest`` requests
-return HTTP 409 Conflict. Ingest runs in a daemon thread that writes the
-manifest progressively, exactly as the CLI's ``ingest`` command does.
+return HTTP 409 Conflict, as do ``/api/reset`` requests while an ingest is
+in flight. Ingest runs in a daemon thread that writes the manifest
+progressively, exactly as the CLI's ``ingest`` command does.
 
 Public API: :func:`serve_forever`.
 """
@@ -15,12 +18,15 @@ from __future__ import annotations
 
 import http.server
 import json
+import shutil
 import socketserver
 import threading
 import webbrowser
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+
+from stemguessr.manifest import MANIFEST_FILENAME
 
 # The frontend ships inside the package (src/stemguessr/web/), so the wheel
 # is self-contained and `uvx stemguessr serve` works without a repo checkout.
@@ -48,6 +54,11 @@ class _IngestState:
             self._thread = t
         t.start()
         return True
+
+    def is_busy(self) -> bool:
+        """True iff an ingest thread is currently running."""
+        with self._lock:
+            return self._thread is not None and self._thread.is_alive()
 
 
 def _make_handler(
@@ -83,6 +94,8 @@ def _make_handler(
         def do_POST(self) -> None:
             if self.path == "/api/ingest":
                 self._handle_ingest()
+            elif self.path == "/api/reset":
+                self._handle_reset()
             else:
                 self._json_error(404, f"unknown endpoint {self.path!r}")
 
@@ -121,6 +134,33 @@ def _make_handler(
                 return
 
             self._json_response(202, {"status": "started"})
+
+        # --- /api/reset --------------------------------------------------
+
+        def _handle_reset(self) -> None:
+            """Clear the ingest cache (manifest + stems + previews).
+
+            Refused while an ingest is in flight: the ingest thread has no
+            safe cancellation point and would immediately re-create the
+            files being deleted. (The busy check and the deletion are not
+            atomic — an ingest POST could in principle land between them —
+            but the server is a single-user localhost app, so we accept the
+            race rather than complicate the locking.)
+            """
+            if state.is_busy():
+                self._json_error(409, "ingest running — cannot reset now")
+                return
+            try:
+                (cache_dir / MANIFEST_FILENAME).unlink(missing_ok=True)
+                for sub in ("stems", "previews"):
+                    subdir = cache_dir / sub
+                    if subdir.exists():
+                        shutil.rmtree(subdir)
+            except OSError as e:
+                self._json_error(500, f"reset failed: {e}")
+                return
+            log("[server] cache reset — manifest, stems, previews deleted")
+            self._json_response(200, {"status": "reset"})
 
         # --- response helpers --------------------------------------------
 

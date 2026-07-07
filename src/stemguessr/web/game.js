@@ -74,6 +74,7 @@ const els = {
     ingestSubmit:   document.getElementById('ingest-submit'),
     playerSection:  document.getElementById('player-section'),
     guessSection:   document.getElementById('guess-section'),
+    resetBtn:       document.getElementById('reset-btn'),
 };
 
 // ============================================================
@@ -339,6 +340,7 @@ function wireEvents() {
     els.skipBtn.addEventListener('click', skip);
     els.nextBtn.addEventListener('click', nextTrack);
     els.ingestForm.addEventListener('submit', submitIngestForm);
+    els.resetBtn.addEventListener('click', resetGame);
 
     // Initialise slider to the documented default; user adjustments live-update
     // the master gain.
@@ -487,7 +489,11 @@ function updateRoundLabel() {
 }
 
 function getActiveStemUrls() {
+    // Guard: callable from stop()/drawIdleWaveform() in states where no
+    // track is loaded (e.g. reset from the ingest prompt). Callers all
+    // treat an empty list as "no audio".
     const track = state.trackOrder[state.currentIndex];
+    if (!state.manifest || !track) return [];
     const stems = state.manifest.stems.slice(0, state.round + 1);
     return stems.map((s) => track.stems[s]);
 }
@@ -831,6 +837,59 @@ function clearRevealView() {
 function nextTrack() {
     state.currentIndex++;
     loadCurrentTrack();
+}
+
+// ============================================================
+// Reset — clear the server-side cache and return to the playlist form
+// ============================================================
+
+async function resetGame() {
+    // Native confirm() is the minimal are-you-sure implementation: modal,
+    // keyboard-accessible, zero markup. The action is destructive (deletes
+    // every ingested stem and preview on disk), hence the hard gate.
+    const sure = window.confirm(
+        'Are you sure? This deletes all ingested stems and previews from '
+        + 'the local cache and returns to the playlist form.',
+    );
+    if (!sure) return;
+
+    let response;
+    try {
+        response = await fetch('/api/reset', { method: 'POST' });
+    } catch (e) {
+        els.status.textContent = `Could not reach the server: ${e.message}.`;
+        return;
+    }
+    if (!response.ok) {
+        // Most likely 409: an ingest is still running server-side and the
+        // cache cannot be cleared out from under it.
+        const body = await response.text();
+        els.status.textContent =
+            `Reset rejected (HTTP ${response.status}): ${body}`;
+        return;
+    }
+
+    // Full client teardown, mirroring a fresh page load: stop audio,
+    // cancel manifest polling, and drop every piece of manifest-derived
+    // state (including decoded audio buffers — the files they came from
+    // no longer exist).
+    stop();
+    if (state.pollTimer !== null) {
+        clearTimeout(state.pollTimer);
+        state.pollTimer = null;
+    }
+    state.manifest = null;
+    state.trackOrder = [];
+    state.knownTrackIds = new Set();
+    state.currentIndex = 0;
+    state.round = 0;
+    state.guesses = [];
+    state.buffersByUrl = new Map();
+    state.cachedWaveform = null;
+    state.pausedOffset = 0;
+    els.guessList.innerHTML = '';
+
+    showIngestPrompt();
 }
 
 // ============================================================

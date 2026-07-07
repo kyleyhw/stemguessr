@@ -371,6 +371,60 @@ input[type="text"]:focus {
     font-style: italic;
 }
 
+/* HUD — fixed top-right chip cluster (score, reset). Chips are small and
+   low-contrast so the main UI reads exactly as before; any detail lives in
+   a panel that appears only on hover (or keyboard focus, for a11y). */
+
+.hud {
+    position: fixed;
+    top: 0.9rem;
+    right: 0.9rem;
+    display: flex;
+    gap: 0.4rem;
+    z-index: 10;
+}
+
+.hud-item {
+    position: relative;
+}
+
+.hud-chip {
+    background: var(--cream-deep);
+    color: var(--ink-soft);
+    border: 1px solid var(--cream-shadow);
+    padding: 0.3rem 0.7rem;
+    font-size: 0.78rem;
+    font-weight: 400;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.hud-chip:hover:not(:disabled) {
+    background: var(--cream);
+    color: var(--ink);
+}
+
+.hud-panel {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 0.3rem);
+    width: 280px;
+    max-height: 60vh;
+    overflow-y: auto;
+    background: var(--cream-deep);
+    border: 1px solid var(--cream-shadow);
+    border-radius: var(--radius);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
+    padding: 0.7rem 0.9rem;
+    text-align: left;
+}
+
+.hud-item:hover .hud-panel,
+.hud-item:focus-within .hud-panel {
+    display: block;
+}
+
 /* Footer */
 
 footer {
