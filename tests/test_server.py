@@ -136,3 +136,12 @@ class TestRouting:
         status, body = server.request("GET", "/")
         assert status == 200
         assert "StemGuessr" in body
+
+    def test_favicon_served(self, server: _RunningServer) -> None:
+        """GET /favicon.svg must serve the bundled icon (200), not fall
+        through to the cache dir and 404. Guards both the route and the
+        icon's inclusion in the wheel.
+        """
+        status, body = server.request("GET", "/favicon.svg")
+        assert status == 200
+        assert "<svg" in body

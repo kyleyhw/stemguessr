@@ -87,7 +87,7 @@ def _make_handler(
             # stems/*, previews/*) is served out of cache_dir.
             if clean in ("/", "/index.html"):
                 return str(web_dir / "index.html")
-            if clean in ("/styles.css", "/game.js"):
+            if clean in ("/styles.css", "/game.js", "/favicon.svg"):
                 return str(web_dir / clean.lstrip("/"))
             return super().translate_path(path)
 

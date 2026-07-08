@@ -6,8 +6,8 @@
 | Scope | `stemguessr.server` (`/api/reset`, packaged frontend routing), packaging (self-contained wheel), frontend (reset chip, score HUD, Enter key) |
 | Test files | `tests/test_server.py` (new), `tests/test_cli.py` (one assertion generalised), Playwright end-to-end session |
 | Runner | pytest 9.0.3 on Python 3.12.12 (Windows 10 x64); Playwright MCP (Chromium) |
-| Result | **83 passed** (full suite minus `test_separate.py`); Playwright session: all checks passed |
-| Total runtime | **3.21 s** (pytest); ~8 min wall-clock (interactive Playwright session) |
+| Result | **84 passed** (full suite minus `test_separate.py`); Playwright session: all checks passed |
+| Total runtime | **3.67 s** (pytest); ~8 min wall-clock (interactive Playwright session) |
 
 ## Unit / integration tests (pytest)
 
@@ -20,6 +20,7 @@ The handler class is built by a closure (`_make_handler`) and served threaded; u
 - **Reset refused while ingest runs.** Busy state is produced by parking a *real* thread on a `threading.Event` via the production `try_start`, so `is_busy()` is exercised through the same lock the production path uses (a monkeypatched boolean would not test the locking). Asserts 409 and that every seeded file survives. The thread is released in a `finally` so a failing assertion cannot leak a parked thread.
 - **Unknown POST → 404.** Route-fallthrough guard.
 - **`GET /` serves the bundled frontend.** Asserts 200 and that the body contains "StemGuessr" — the regression guard for the `web/`-into-package move: if wheel bundling or `DEFAULT_WEB_DIR` resolution regresses, this fails first.
+- **`GET /favicon.svg` serves the icon.** Asserts 200 and an `<svg` body, guarding both the route and the icon's inclusion in the wheel. Complements the browser check that the icon link suppresses the default `/favicon.ico` request.
 
 ### Packaging verification (manual, one-time)
 
@@ -47,11 +48,15 @@ Run against a **copy** of `test_cache` (8 tracks, 4 stems) in the session scratc
 | Enter on reveal advances to next track (reveal hidden, Round 1/4, guess re-enabled) | ✓ |
 | Enter with the *Next track* button focused advances **exactly once** (Track 2→3, not 4) — the `preventDefault` double-fire guard | ✓ |
 | Enter submits guesses (all guesses in the session were submitted via Enter) | ✓ |
-| Console: no errors introduced; only the pre-existing `favicon.ico` 404 | ✓ |
+| Favicon: page requests `/favicon.svg` (200), never probes `/favicon.ico`; console fully clean (the former favicon 404 is gone) | ✓ |
+
+## Launcher / uninstaller scripts
+
+`run.command` and `uninstall.command` are verified statically (no macOS runner available in this environment): `git show :run.command | file -` reports "Bourne-Again shell script, ASCII text executable" with zero carriage returns, confirming the `.gitattributes` LF pinning holds in the committed blob (a CRLF here would break the shebang on macOS). Both `.command` files are staged mode `100755`, so GitHub's ZIP export and macOS Archive Utility preserve the executable bit that lets Finder run them. Runtime behaviour on macOS (double-click → Terminal, Gatekeeper one-time approval) is documented in `docs/distribution.md` rather than asserted here.
 
 ## Failures
 
-One pytest failure during the phase (the hard-coded version assertion, documented above); fixed and re-run to green. No end-to-end failures. One pre-existing cosmetic issue surfaced (missing favicon → 404 on every page load), left out of scope.
+One pytest failure during the phase (the hard-coded version assertion, documented above); fixed and re-run to green. No end-to-end failures. The previously out-of-scope favicon 404 is now fixed and covered (route test + browser check).
 
 ## Reproduction
 

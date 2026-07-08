@@ -1,0 +1,7 @@
+# Line-ending policy for the cross-platform launcher/uninstaller scripts.
+# A .command/.sh with CRLF fails under bash (the trailing \r breaks the
+# shebang and every line); a .bat is happiest with CRLF. Pin both so the
+# committer's OS and each cloner's autocrlf setting cannot corrupt them.
+*.command text eol=lf
+*.sh      text eol=lf
+*.bat     text eol=crlf

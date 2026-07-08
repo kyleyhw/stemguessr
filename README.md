@@ -4,18 +4,16 @@ A music-guessing game built around source-separated stems. Given any *public* Sp
 
 ## Quickstart
 
-No Python toolchain or Spotify credentials required — everything runs locally on your machine.
+No Python toolchain or Spotify credentials required — everything runs locally on your machine. **One download, one double-click**, same on both operating systems:
 
-**Windows (no terminal):** download this repo as a ZIP ([Code → Download ZIP](https://github.com/kyleyhw/stemguessr/archive/refs/heads/main.zip)), unzip, and double-click **`run.bat`**. It installs [`uv`](https://docs.astral.sh/uv/) if missing, starts the server, and the game opens in your browser automatically.
+1. Download this repo as a ZIP ([Code → Download ZIP](https://github.com/kyleyhw/stemguessr/archive/refs/heads/main.zip)) and unzip it.
+2. Double-click **`run.bat`** (Windows) or **`run.command`** (macOS). It installs [`uv`](https://docs.astral.sh/uv/) if missing, starts the server, and opens the game in your browser.
 
-**macOS / any terminal:** install `uv` (one line), then run the game:
+The first time, your OS may flag the downloaded script (Windows SmartScreen → *More info* → *Run anyway*; macOS → Control-click `run.command` → *Open*). This is a one-time click. Then paste a public Spotify playlist URL into the form and play.
 
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh        # macOS/Linux; see run.bat for Windows
-uvx stemguessr serve
-```
+**To uninstall:** double-click `uninstall.bat` / `uninstall.command`, then delete the folder.
 
-Then paste a public Spotify playlist URL into the form and play. The first run downloads the dependencies (~2–3 GB, mostly PyTorch) and ~250 MB of Demucs weights; after that each track separates in ~5–15 s on CPU and becomes playable the moment it finishes. Re-running against the same playlist is a cache hit (no network, no Demucs). Distribution rationale and the PyPI release process are in [`docs/distribution.md`](docs/distribution.md).
+The first run downloads the dependencies (~2–3 GB, mostly PyTorch) and ~250 MB of Demucs weights; after that each track separates in ~5–15 s on CPU and becomes playable the moment it finishes. Re-running against the same playlist is a cache hit (no network, no Demucs). Once the package is on PyPI, terminal users can skip the download entirely with `uvx stemguessr serve`. Distribution rationale, the uninstall tiers, and the PyPI release process are in [`docs/distribution.md`](docs/distribution.md).
 
 **Development install:**
 
@@ -79,6 +77,7 @@ stemguessr/
 ├── .github/
 │   └── workflows/
 │       └── publish.yml  ← PyPI trusted publishing on GitHub release
+├── .gitattributes       ← LF/CRLF policy for the launcher scripts
 ├── .gitignore
 ├── .pre-commit-config.yaml
 ├── .python-version
@@ -89,6 +88,9 @@ stemguessr/
 ├── README.md            ← you are here
 ├── pyproject.toml
 ├── run.bat              ← Windows one-click launcher
+├── run.command          ← macOS one-click launcher
+├── uninstall.bat        ← Windows uninstaller
+├── uninstall.command    ← macOS uninstaller
 ├── uv.lock
 ├── docs/
 │   ├── index.md         ← documentation hub
@@ -111,7 +113,8 @@ stemguessr/
 │       └── web/         ← Phase 7 frontend (ships inside the wheel)
 │           ├── index.html
 │           ├── styles.css
-│           └── game.js
+│           ├── game.js
+│           └── favicon.svg
 ├── tests/
 │   ├── __init__.py
 │   ├── fixtures/

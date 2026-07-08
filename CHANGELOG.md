@@ -11,7 +11,9 @@ Friend-proof distribution, a one-click reset, and a score tracker.
 ### Added
 
 - **Self-contained wheel.** The frontend moved into the package (`src/stemguessr/web/`), so the built wheel needs no repo checkout: once published, `uvx stemguessr serve` is the whole install story. The dev manifest fixture moved to `tests/fixtures/` so it stays out of the wheel.
-- **`run.bat`** — Windows one-click launcher: installs `uv` if missing, starts the server; first run downloads dependencies (~2–3 GB, mostly PyTorch) and Demucs weights.
+- **One-download, one-click launchers for both OSes.** `run.bat` (Windows) and `run.command` (macOS) are byte-for-byte parallel: install `uv` if missing, then start the server. `run.command` ships with its executable bit set in git so Finder runs it. A `.gitattributes` pins LF/CRLF per script so line endings survive any committer's OS.
+- **One-click uninstallers.** `uninstall.bat` / `uninstall.command` remove the app-local `.venv` and `cache/`, then offer (default no) to clear the shared ~2–3 GB of `uv` cache and Demucs weights; they print the `uv self uninstall` one-liner for a total wipe.
+- **Favicon.** A waveform-mark SVG in the app palette, served at `/favicon.svg` and declared via `<link rel="icon">` — which also stops the browser's default `/favicon.ico` probe, removing the long-standing 404 on every page load.
 - **Browser auto-open.** `stemguessr serve` opens the game in the default browser once the socket is bound; `--no-browser` opts out.
 - **`POST /api/reset`** — clears `manifest.json`, `stems/`, `previews/` from the cache; 409 while an ingest is in flight. Frontend `↺ reset` chip (top-right HUD) gates it behind an "Are you sure?" confirm, then returns to the playlist form.
 - **Score tracker.** A `score n/m` HUD chip records each track's outcome at reveal time; hovering expands a per-stage breakdown (which songs were solved with how many stems audible, plus misses). Session-scoped; zeroed on reset or a new ingest.

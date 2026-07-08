@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="StemGuessr">
+  <rect width="32" height="32" rx="7" fill="#f3e9d2"/>
+  <g fill="#6a1d24">
+    <rect x="5"  y="13" width="3" height="6"  rx="1.5"/>
+    <rect x="10" y="9"  width="3" height="14" rx="1.5"/>
+    <rect x="15" y="4"  width="3" height="24" rx="1.5"/>
+    <rect x="20" y="10" width="3" height="12" rx="1.5"/>
+    <rect x="25" y="14" width="3" height="4"  rx="1.5"/>
+  </g>
+</svg>

@@ -87,10 +87,12 @@ Status tags: `[completed]`, `[in-progress]`, `[pending]`. Updated live as work p
     - [completed] Relocate the dev fixture to `tests/fixtures/manifest.json` (test asset — must not ship in the wheel).
     - [completed] Build wheel; verify static assets are included and `DEFAULT_WEB_DIR` resolves from an installed wheel.
 55. [in-progress] Zero-hassle launch for friends' machines (all processing stays local):
-    - [completed] `run.bat` — Windows double-click launcher (auto-installs uv); `serve` opens the browser itself once the socket is bound (`--no-browser` opts out).
+    - [completed] Symmetric one-download, one-click launchers: `run.bat` (Windows) and `run.command` (macOS, exec bit set in git); `serve` opens the browser itself once the socket is bound (`--no-browser` opts out). `.gitattributes` pins per-script line endings.
+    - [completed] One-click uninstallers `uninstall.bat` / `uninstall.command` (app-local always; shared uv/torch caches on confirmation).
     - [completed] GitHub Actions trusted-publishing workflow (`.github/workflows/publish.yml`) for PyPI releases.
-    - [completed] `docs/distribution.md` + README quickstart with per-OS one-liners (`uvx stemguessr serve`).
+    - [completed] `docs/distribution.md` + README quickstart (double-click model + `uvx stemguessr serve` terminal alternative).
     - [pending] PyPI project creation + trusted-publisher registration (manual, owner-only step) and first `v0.2.0` GitHub release.
+60. [completed] Favicon: waveform-mark SVG served at `/favicon.svg` and declared via `<link rel="icon">`, removing the default `/favicon.ico` 404.
 56. [completed] Reset workflow: `POST /api/reset` (409 while ingest in flight; clears `manifest.json`, `stems/`, `previews/`), frontend `↺ reset` chip with are-you-sure confirmation returning to the playlist form; `tests/test_server.py`.
 57. [completed] Score tracker: per-track outcomes recorded at reveal (solved-at-stage-k or missed); `score n/m` chip with hover-expand panel grouping songs by solve stage. UI delta limited to a two-chip top-right cluster.
 58. [completed] Enter mirrors the primary action: reveal card advances to the next track on Enter (forms already submit natively).

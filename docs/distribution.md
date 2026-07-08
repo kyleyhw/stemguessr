@@ -18,15 +18,31 @@ How StemGuessr gets onto a machine that has no Python toolchain installed — a 
 
 ## What a friend actually does
 
-| OS | Steps |
-|----|-------|
-| **Windows** | Download the repo ZIP from GitHub → unzip → double-click `run.bat`. It installs `uv` if missing, starts the server, and the game opens in the browser automatically. |
-| **Windows (terminal)** | `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 \| iex"`, then `uvx stemguessr serve` in a new terminal. |
-| **macOS** | Paste into Terminal: `curl -LsSf https://astral.sh/uv/install.sh \| sh` , then `uvx stemguessr serve` in a new terminal (or `~/.local/bin/uvx stemguessr serve` in the same one). |
+The install is symmetric across the two OSes: **one download, one double-click.** Download the repo ZIP from GitHub ([Code → Download ZIP](https://github.com/kyleyhw/stemguessr/archive/refs/heads/main.zip)), unzip it, and double-click the launcher for the OS:
+
+| OS | Double-click | First-run security prompt |
+|----|-------------|---------------------------|
+| **Windows** | `run.bat` | SmartScreen may show "Windows protected your PC" → *More info* → *Run anyway*. One-time. |
+| **macOS** | `run.command` | Gatekeeper may say the file is from an unidentified developer → **Control-click `run.command` → Open → Open**. One-time. |
+
+Each launcher installs `uv` if it is missing, then starts the server; the game opens in the browser automatically. The two scripts are byte-for-byte parallel — same three steps (find/install `uv`, `uv run --no-dev stemguessr serve`, keep the window open on error) — differing only in shell.
+
+The first-run security prompt is the one asymmetry I cannot remove: both OSes flag files downloaded from the internet, and clearing that flag for good requires code-signing certificates (a paid Apple Developer ID on macOS; an EV cert on Windows). Both prompts are one-time per download and take one extra click. `run.command` ships with its executable bit set in git (mode `100755`), which GitHub's ZIP export and macOS's Archive Utility both preserve, so Finder treats it as a program rather than opening it in a text editor.
+
+**Terminal alternative (either OS), once the package is on PyPI:** install `uv` with its one-line script ([Windows](https://docs.astral.sh/uv/getting-started/installation/): `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`; macOS/Linux: `curl -LsSf https://astral.sh/uv/install.sh | sh`), then `uvx stemguessr serve`.
 
 The server opens the game in the default browser as soon as its socket is bound (`--no-browser` disables this). The browser-open call is made immediately after binding rather than after a delay: a TCP connection arriving before `serve_forever()` starts simply queues in the listen backlog and is served milliseconds later, so no port-polling loop is needed anywhere.
 
 **First-run cost (any route, any OS):** ~2–3 GB of Python dependencies (dominated by PyTorch) plus ~250 MB of Demucs model weights, downloaded once into `uv`'s cache and the Demucs cache respectively. Subsequent launches start in seconds. This cost is inherent to constraint 1 — local separation means a local PyTorch.
+
+## Uninstalling
+
+Symmetric with install: double-click `uninstall.bat` (Windows) or `uninstall.command` (macOS). Each removes StemGuessr's footprint in two tiers:
+
+1. **App-local, always removed:** the project virtual environment (`.venv`) and the ingested cache (`cache/`, holding stems and previews). These sit inside the downloaded folder, so deleting the folder would also remove them — the script does it explicitly so the disk is reclaimed before you delete anything.
+2. **Shared downloads, removed only on confirmation:** `uv`'s package cache and the Demucs model weights (`~/.cache/torch`), together the ~2–3 GB bulk. These live *outside* the folder and may be shared with other `uv`/PyTorch projects, so the script asks first and defaults to *no*. On a machine used only for StemGuessr, answering yes reclaims essentially everything.
+
+The scripts deliberately leave `uv` itself installed (it is a general-purpose tool the friend may want) and print the one-liner to remove it — `uv self uninstall` — for a total wipe. After running the uninstaller, deleting the StemGuessr folder finishes the job.
 
 ## Publishing to PyPI
 
