@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
-from stemguessr.cli import __version__, app
+from stemguessr.cli import __version__, app, run_ingest_pipeline
 from stemguessr.manifest import MANIFEST_FILENAME
 from stemguessr.separate import MODEL_STEMS
 from stemguessr.spotify import Track
@@ -251,6 +251,45 @@ class TestShuffledOrder:
         )
         assert result.exit_code == 0
         assert stub_pipeline.tracks == original
+
+
+class TestCancellation:
+    """``should_cancel`` is polled at the top of each track iteration; the
+    server's reset endpoint uses it to stop an ingest before clearing the
+    cache. These call ``run_ingest_pipeline`` directly (the CLI does not
+    expose the hook) with the stub pipeline active.
+    """
+
+    def test_cancel_before_any_track_processes_none(
+        self, stub_pipeline: StubState, tmp_path: Path
+    ) -> None:
+        stub_pipeline.tracks = [_make_track(f"id{i}") for i in range(3)]
+        run_ingest_pipeline(VALID_PLAYLIST_URL, tmp_path, should_cancel=lambda: True)
+        assert stub_pipeline.download_calls == []
+        manifest = json.loads(
+            (tmp_path / MANIFEST_FILENAME).read_text(encoding="utf-8")
+        )
+        # The finally still finalises the manifest — with zero tracks.
+        assert manifest["tracks"] == []
+        assert manifest["complete"] is True
+
+    def test_cancel_after_two_tracks_stops_loop(
+        self, stub_pipeline: StubState, tmp_path: Path
+    ) -> None:
+        stub_pipeline.tracks = [_make_track(f"id{i}") for i in range(5)]
+
+        # Polled before each track: once two have been downloaded, the next
+        # iteration's check trips and the loop breaks before the third.
+        def should_cancel() -> bool:
+            return len(stub_pipeline.download_calls) >= 2
+
+        run_ingest_pipeline(VALID_PLAYLIST_URL, tmp_path, should_cancel=should_cancel)
+        assert len(stub_pipeline.download_calls) == 2
+        manifest = json.loads(
+            (tmp_path / MANIFEST_FILENAME).read_text(encoding="utf-8")
+        )
+        assert len(manifest["tracks"]) == 2
+        assert manifest["complete"] is True
 
 
 class TestLimit:

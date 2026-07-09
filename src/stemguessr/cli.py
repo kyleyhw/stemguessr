@@ -149,6 +149,7 @@ def run_ingest_pipeline(
     limit: int | None = None,
     force_refresh: bool = False,
     log: Callable[[str], None] = lambda _: None,
+    should_cancel: Callable[[], bool] = lambda: False,
 ) -> Path:
     """Run the ingest end-to-end pipeline: fetch playlist → for each track,
     download the preview and separate it → write manifest progressively.
@@ -156,6 +157,14 @@ def run_ingest_pipeline(
     Used by both the ``ingest`` CLI command and the HTTP server. ``log`` is
     called with one line per progress event; pass ``typer.echo`` from the
     CLI, or a thread-safe printer from the server.
+
+    ``should_cancel`` is polled once before each track and, if it returns
+    True, the loop stops early (the run still writes a final manifest via the
+    ``finally`` below). Cancellation is cooperative and between-track: a
+    Demucs separation already under way is not interrupted — it has no safe
+    internal cancellation point — so the effective latency of a cancel is at
+    most the time to finish the current track. The server's reset endpoint
+    uses this to stop an ingest before clearing the cache.
 
     Returns the path of the final ``manifest.json`` (with ``complete=True``).
     The manifest is also rewritten with ``complete=False`` after every
@@ -208,6 +217,9 @@ def run_ingest_pipeline(
 
     try:
         for i, track in enumerate(tracks, start=1):
+            if should_cancel():
+                log(f"Ingest cancelled after {len(entries)}/{expected} tracks.")
+                break
             log(f"[{i}/{len(tracks)}] {track.title!r} — {', '.join(track.artists)}")
             entry = _process_track(track, cache_dir, model, force_refresh)
             if entry is not None:

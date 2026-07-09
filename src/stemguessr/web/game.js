@@ -932,39 +932,52 @@ function updateScoreHud() {
 
 async function resetGame() {
     // Native confirm() is the minimal are-you-sure implementation: modal,
-    // keyboard-accessible, zero markup. The action is destructive (deletes
-    // every ingested stem and preview on disk), hence the hard gate.
+    // keyboard-accessible, zero markup. The action is destructive (cancels
+    // any ingest and deletes every stem and preview on disk), hence the
+    // hard gate.
     const sure = window.confirm(
-        'Are you sure? This deletes all ingested stems and previews from '
-        + 'the local cache and returns to the playlist form.',
+        'Are you sure? This cancels any ingest in progress, deletes all '
+        + 'ingested stems and previews from the local cache, and returns to '
+        + 'the playlist form.',
     );
     if (!sure) return;
+
+    // Stop polling before the request: the server may spend several seconds
+    // cancelling an in-flight Demucs separation, and a poll firing against
+    // the about-to-be-deleted manifest would clobber the status line.
+    if (state.pollTimer !== null) {
+        clearTimeout(state.pollTimer);
+        state.pollTimer = null;
+    }
+    // The reset request blocks until the server has stopped any ingest, so
+    // signal that and lock the button against a double-submit.
+    els.resetBtn.disabled = true;
+    els.status.textContent = 'Cancelling ingest and clearing the cache…';
 
     let response;
     try {
         response = await fetch('/api/reset', { method: 'POST' });
     } catch (e) {
         els.status.textContent = `Could not reach the server: ${e.message}.`;
+        els.resetBtn.disabled = false;
         return;
+    } finally {
+        els.resetBtn.disabled = false;
     }
     if (!response.ok) {
-        // Most likely 409: an ingest is still running server-side and the
-        // cache cannot be cleared out from under it.
+        // 503 means an ingest was still stopping past the server's join
+        // budget; a retry once the current track finishes will succeed.
         const body = await response.text();
         els.status.textContent =
-            `Reset rejected (HTTP ${response.status}): ${body}`;
+            `Reset failed (HTTP ${response.status}): ${body}`;
         return;
     }
 
-    // Full client teardown, mirroring a fresh page load: stop audio,
-    // cancel manifest polling, and drop every piece of manifest-derived
-    // state (including decoded audio buffers — the files they came from
-    // no longer exist).
+    // Full client teardown, mirroring a fresh page load: stop audio and drop
+    // every piece of manifest-derived state (including decoded audio buffers
+    // — the files they came from no longer exist). Polling was already
+    // stopped above.
     stop();
-    if (state.pollTimer !== null) {
-        clearTimeout(state.pollTimer);
-        state.pollTimer = null;
-    }
     state.manifest = null;
     state.trackOrder = [];
     state.knownTrackIds = new Set();

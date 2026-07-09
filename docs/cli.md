@@ -87,9 +87,15 @@ Routes:
 | GET | `/`, `/index.html`, `/styles.css`, `/game.js` | Static frontend, served from the package's bundled `web/` directory. |
 | GET | `/manifest.json`, `/stems/*`, `/previews/*` | Cache contents, served from `--out`. |
 | POST | `/api/ingest` | JSON body: `{"playlist_url": "...", "n_stems": 4, "limit": null}`. Starts an ingest run in a daemon thread and returns 202. Concurrent calls while a run is in flight return 409 Conflict. |
-| POST | `/api/reset` | Deletes `manifest.json`, `stems/`, and `previews/` from `--out` and returns 200, so the frontend can offer a clean "start over" path. Returns 409 while an ingest is in flight (the ingest thread has no safe cancellation point and would re-create the files mid-delete). Idempotent: resetting an empty cache is 200. |
+| POST | `/api/reset` | Cancels any ingest in flight, waits for it to stop, then deletes `manifest.json`, `stems/`, and `previews/` from `--out`; returns 200. Idempotent: resetting an empty cache is 200. Returns 503 only if a cancelled ingest fails to stop within the join budget (60 s) — a retry once the current track finishes succeeds. See *Cancellation* below. |
 
-The server is single-flight: only one ingest runs at a time. Cancellation is best-effort — closing the server with Ctrl-C terminates the daemon thread; the `try / finally` in `run_ingest_pipeline` still writes a `complete: true` manifest with whatever entries had been separated.
+The server is single-flight: only one ingest runs at a time. Closing the server with Ctrl-C terminates the daemon thread; the `try / finally` in `run_ingest_pipeline` still writes a `complete: true` manifest with whatever entries had been separated.
+
+### Cancellation
+
+`run_ingest_pipeline` polls a `should_cancel` predicate once **before each track** and, if it returns true, breaks the loop (still finalising the manifest via its `finally`). Cancellation is therefore *cooperative and between-track*: a Demucs separation already under way is not interrupted — PyTorch offers no safe mid-inference cancellation point — so the effective latency of a cancel is at most the time to finish the current track (a single separation, ~5–15 s on CPU for 4 stems, more for 6).
+
+`POST /api/reset` uses this: it sets the run's cancel flag and **joins the ingest thread before deleting anything**. That ordering is what makes reset-during-ingest safe — the thread has run its final manifest write and terminated before the delete begins, so it cannot re-create files under the delete. The join is bounded by a 60 s budget (`_CANCEL_JOIN_TIMEOUT`); overshooting it yields 503 with the cache left intact rather than a delete racing a live writer. The CLI's `ingest` command does not pass `should_cancel` (its default never cancels), so terminal ingest behaviour is unchanged.
 
 ## Output layout
 

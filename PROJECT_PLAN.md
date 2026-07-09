@@ -93,7 +93,7 @@ Status tags: `[completed]`, `[in-progress]`, `[pending]`. Updated live as work p
     - [completed] `docs/distribution.md` + README quickstart (double-click model + `uvx stemguessr serve` terminal alternative).
     - [pending] PyPI project creation + trusted-publisher registration (manual, owner-only step) and first `v0.2.0` GitHub release.
 60. [completed] Favicon: waveform-mark SVG served at `/favicon.svg` and declared via `<link rel="icon">`, removing the default `/favicon.ico` 404.
-56. [completed] Reset workflow: `POST /api/reset` (409 while ingest in flight; clears `manifest.json`, `stems/`, `previews/`), frontend `↺ reset` chip with are-you-sure confirmation returning to the playlist form; `tests/test_server.py`.
+56. [completed] Reset workflow: `POST /api/reset` cancels any in-flight ingest (cooperative between-track, join-before-delete), then clears `manifest.json`, `stems/`, `previews/`; frontend `↺ reset` chip with are-you-sure confirmation returning to the playlist form; `tests/test_server.py` + `tests/test_cli.py` cancellation tests.
 57. [completed] Score tracker: per-track outcomes recorded at reveal (solved-at-stage-k or missed); `score n/m` chip with hover-expand panel grouping songs by solve stage. UI delta limited to a two-chip top-right cluster.
 58. [completed] Enter mirrors the primary action: reveal card advances to the next track on Enter (forms already submit natively).
 59. [completed] Docs, CHANGELOG 0.2.0, version bump, test report, Playwright end-to-end verification (game flow unchanged; reset and score exercised in a scratch cache).

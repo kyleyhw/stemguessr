@@ -3,16 +3,17 @@
 The server is exercised over real HTTP on an ephemeral port (port 0 →
 OS-assigned): ``_make_handler`` is closed over a ``tmp_path`` cache dir and
 a fresh ``_IngestState``, served by the same ``_ThreadedHTTPServer`` used in
-production. No ingest is ever invoked; the busy state is produced by parking
-a real thread on an :class:`threading.Event`, so ``is_busy()`` is genuinely
-true through the same lock the production path uses (rather than a
-monkeypatched stub).
+production. No real ingest is ever invoked; a running ingest is modelled by a
+real thread that polls ``state.should_cancel`` exactly as the pipeline does
+between tracks, so the cancellation path is exercised through the same lock
+and event the production code uses (rather than a monkeypatched stub).
 """
 
 from __future__ import annotations
 
 import http.client
 import threading
+import time
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -102,26 +103,65 @@ class TestReset:
         status, _body = server.request("POST", "/api/reset")
         assert status == 200
 
-    def test_reset_refused_while_ingest_running(self, server: _RunningServer) -> None:
+    def test_reset_cancels_running_ingest(self, server: _RunningServer) -> None:
+        """Reset must cancel an in-flight ingest, wait for it to stop, then
+        clear the cache — not refuse. The fake ingest models the pipeline's
+        cooperative between-track cancellation by polling ``should_cancel``.
+        """
+        seeded = _seed_cache(server.cache_dir)
+
+        started = threading.Event()
+        stopped = threading.Event()
+
+        def _fake_ingest() -> None:
+            started.set()
+            # Cooperative cancellation, exactly as run_ingest_pipeline does:
+            # spin until the shared cancel flag is set, then return.
+            while not server.state.should_cancel():
+                time.sleep(0.01)
+            stopped.set()
+
+        assert server.state.try_start(_fake_ingest)
+        assert started.wait(timeout=5)
+
+        status, body = server.request("POST", "/api/reset")
+        assert status == 200
+        assert "reset" in body
+        # The fake ingest observed the cancel and returned before the delete.
+        assert stopped.is_set()
+        assert not server.state.is_busy()
+        for path in seeded:
+            assert not path.exists(), f"survived reset: {path}"
+
+    def test_reset_times_out_if_ingest_wont_stop(self, server: _RunningServer) -> None:
+        """If a run ignores cancellation past the join budget, reset reports
+        503 and leaves the cache intact rather than deleting under a live
+        writer. A zero timeout is monkeypatched in so the test is instant.
+        """
+        import stemguessr.server as server_mod
+
+        monkey = pytest.MonkeyPatch()
+        monkey.setattr(server_mod, "_CANCEL_JOIN_TIMEOUT", 0.0)
         seeded = _seed_cache(server.cache_dir)
 
         started = threading.Event()
         release = threading.Event()
 
-        def _fake_ingest() -> None:
+        def _stuck_ingest() -> None:
             started.set()
-            release.wait()
+            release.wait()  # never observes cancellation
 
-        assert server.state.try_start(_fake_ingest)
-        assert started.wait(timeout=5)
         try:
+            assert server.state.try_start(_stuck_ingest)
+            assert started.wait(timeout=5)
             status, body = server.request("POST", "/api/reset")
-            assert status == 409
-            assert "ingest running" in body
+            assert status == 503
+            assert "stopping" in body
             for path in seeded:
-                assert path.exists(), f"deleted despite 409: {path}"
+                assert path.exists(), f"deleted despite 503: {path}"
         finally:
             release.set()
+            monkey.undo()
 
 
 class TestRouting:

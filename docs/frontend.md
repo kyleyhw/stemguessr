@@ -78,7 +78,7 @@ A fixed top-right chip cluster keeps the main UI unchanged while exposing two co
 
 ### Reset
 
-The reset chip returns the game to the paste-a-playlist form after a native `confirm()` "Are you sure?" gate (modal, keyboard-accessible, zero markup — the minimal implementation of a destructive-action guard). On confirmation the client calls `POST /api/reset` — the server deletes `manifest.json`, `stems/`, and `previews/` from the cache, refusing with HTTP 409 while an ingest is in flight — then tears down all manifest-derived client state (audio, poll timer, decoded buffers, scoreboard) and shows the ingest prompt. A cancelled dialog is a strict no-op.
+The reset chip returns the game to the paste-a-playlist form after a native `confirm()` "Are you sure?" gate (modal, keyboard-accessible, zero markup — the minimal implementation of a destructive-action guard). On confirmation the client stops manifest polling, shows "Cancelling ingest and clearing the cache…", disables the reset button against a double-submit, and calls `POST /api/reset`. The server **cancels any ingest in progress**, waits for it to stop, then deletes `manifest.json`, `stems/`, and `previews/` (see [`cli.md`](cli.md) for the cancellation contract). Because cancellation is between-track, this request can take a few seconds while a Demucs separation already under way finishes — hence the status message and the disabled button. On success the client tears down all manifest-derived state (audio, decoded buffers, scoreboard) and shows the ingest prompt; a 503 (ingest still stopping past the server's budget) leaves a retry-shortly message. A cancelled dialog is a strict no-op.
 
 ### Progressive ingest
 

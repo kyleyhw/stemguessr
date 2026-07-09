@@ -36,20 +36,38 @@ from stemguessr.manifest import MANIFEST_FILENAME
 DEFAULT_WEB_DIR = Path(__file__).parent / "web"
 
 
+# Upper bound on how long the reset endpoint waits for a cancelled ingest to
+# stop. Cancellation is checked between tracks, so the wait is at most the
+# time to finish the track in flight — a single Demucs separation, ~5-15 s on
+# CPU for 4 stems and more for 6. 60 s leaves generous margin; if it is ever
+# exceeded the endpoint reports 503 and the user can retry (by which point the
+# thread has almost certainly finished).
+_CANCEL_JOIN_TIMEOUT = 60.0
+
+
 class _IngestState:
-    """Thread-safe single-flight tracker for the in-flight ingest, if any."""
+    """Thread-safe single-flight tracker for the in-flight ingest, if any,
+    with cooperative cancellation.
+    """
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
+        # Set to request cancellation of the current run; replaced with a
+        # fresh (clear) event each time a new ingest starts.
+        self._cancel = threading.Event()
 
     def try_start(self, target: Callable[[], None]) -> bool:
         """Start ``target`` in a daemon thread iff no ingest is currently
         running. Returns True on a successful spawn, False if rejected.
+
+        A fresh cancellation event is installed before the thread starts, so
+        ``should_cancel`` reflects only the run being started.
         """
         with self._lock:
             if self._thread is not None and self._thread.is_alive():
                 return False
+            self._cancel = threading.Event()
             t = threading.Thread(target=target, daemon=True)
             self._thread = t
         t.start()
@@ -59,6 +77,26 @@ class _IngestState:
         """True iff an ingest thread is currently running."""
         with self._lock:
             return self._thread is not None and self._thread.is_alive()
+
+    def should_cancel(self) -> bool:
+        """Poll target for the current run; passed to ``run_ingest_pipeline``."""
+        return self._cancel.is_set()
+
+    def cancel_and_join(self, timeout: float) -> bool:
+        """Request cancellation and wait for the ingest thread to terminate.
+
+        Returns True if no ingest was running or it stopped within ``timeout``
+        (so callers may safely touch the cache), False if it is still alive
+        after the timeout. The join runs outside the lock so concurrent
+        ``is_busy`` calls do not block.
+        """
+        with self._lock:
+            thread = self._thread
+            self._cancel.set()
+        if thread is None or not thread.is_alive():
+            return True
+        thread.join(timeout)
+        return not thread.is_alive()
 
 
 def _make_handler(
@@ -125,6 +163,7 @@ def _make_handler(
                         n_stems=n_stems,
                         limit=limit,
                         log=log,
+                        should_cancel=state.should_cancel,
                     )
                 except Exception as exc:  # noqa: BLE001
                     log(f"[server] ingest failed: {exc}")
@@ -138,17 +177,23 @@ def _make_handler(
         # --- /api/reset --------------------------------------------------
 
         def _handle_reset(self) -> None:
-            """Clear the ingest cache (manifest + stems + previews).
+            """Cancel any in-flight ingest, then clear the cache (manifest +
+            stems + previews).
 
-            Refused while an ingest is in flight: the ingest thread has no
-            safe cancellation point and would immediately re-create the
-            files being deleted. (The busy check and the deletion are not
-            atomic — an ingest POST could in principle land between them —
-            but the server is a single-user localhost app, so we accept the
-            race rather than complicate the locking.)
+            The cancel-then-join before deleting is the crucial ordering: it
+            guarantees the ingest thread has run its ``finally`` (its last
+            manifest write) and terminated before we delete, so it cannot
+            re-create files under us. A stalled separation that outruns the
+            join budget yields 503 rather than a partial delete; the user
+            retries. (A concurrent ``/api/ingest`` landing after the join
+            could still race the delete, but that needs two clients against a
+            single-user localhost server, so we accept it rather than add a
+            global lock.)
             """
-            if state.is_busy():
-                self._json_error(409, "ingest running — cannot reset now")
+            if not state.cancel_and_join(_CANCEL_JOIN_TIMEOUT):
+                self._json_error(
+                    503, "ingest is still stopping — try reset again shortly"
+                )
                 return
             try:
                 (cache_dir / MANIFEST_FILENAME).unlink(missing_ok=True)

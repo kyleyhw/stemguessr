@@ -2,22 +2,23 @@
 
 | Field | Value |
 |-------|-------|
-| Date | 2026-07-07 |
-| Scope | `stemguessr.server` (`/api/reset`, packaged frontend routing), packaging (self-contained wheel), frontend (reset chip, score HUD, Enter key) |
-| Test files | `tests/test_server.py` (new), `tests/test_cli.py` (one assertion generalised), Playwright end-to-end session |
+| Date | 2026-07-09 |
+| Scope | `stemguessr.server` (`/api/reset` cancel-then-clear, packaged frontend routing), `stemguessr.cli` (ingest cancellation), packaging (self-contained wheel), frontend (reset chip, score HUD, Enter key, favicon) |
+| Test files | `tests/test_server.py` (new), `tests/test_cli.py` (cancellation tests + one assertion generalised), Playwright end-to-end sessions (game + reset-cancels-ingest harness) |
 | Runner | pytest 9.0.3 on Python 3.12.12 (Windows 10 x64); Playwright MCP (Chromium) |
-| Result | **84 passed** (full suite minus `test_separate.py`); Playwright session: all checks passed |
-| Total runtime | **3.67 s** (pytest); ~8 min wall-clock (interactive Playwright session) |
+| Result | **87 passed** (full suite minus `test_separate.py`); Playwright sessions: all checks passed |
+| Total runtime | **4.26 s** (pytest); ~10 min wall-clock (interactive Playwright sessions) |
 
 ## Unit / integration tests (pytest)
 
-### `tests/test_server.py` — 5 tests, why over real HTTP
+### `tests/test_server.py` — 7 tests, why over real HTTP
 
 The handler class is built by a closure (`_make_handler`) and served threaded; unit-testing methods in isolation would miss the routing, closure wiring, and threading. Each test therefore boots the production `_ThreadedHTTPServer` on an **ephemeral port** (bind to port 0 → OS assigns; no collisions in CI or parallel runs) against a `tmp_path` cache.
 
 - **Reset clears the cache.** Cache seeded with one artefact of each kind reset must delete — `manifest.json`, a stem WAV, a preview file. This is the minimal set distinguishing "deleted the whole cache" from "deleted only one directory". Asserts HTTP 200 and that all three files *and* both directories are gone.
 - **Reset is idempotent.** `POST /api/reset` on an empty cache returns 200, not an error — a double-click or premature reset must be harmless (`unlink(missing_ok=True)` + existence-guarded `rmtree`).
-- **Reset refused while ingest runs.** Busy state is produced by parking a *real* thread on a `threading.Event` via the production `try_start`, so `is_busy()` is exercised through the same lock the production path uses (a monkeypatched boolean would not test the locking). Asserts 409 and that every seeded file survives. The thread is released in a `finally` so a failing assertion cannot leak a parked thread.
+- **Reset cancels a running ingest.** A *real* thread models the pipeline's cooperative between-track cancellation by spinning on `state.should_cancel` (the production predicate, same lock and event). Reset asserts 200, that the fake observed the cancel and returned, that the state is no longer busy, and that every seeded file is deleted. This is the direct regression test for the reported bug ("reset does nothing while ingesting").
+- **Reset times out gracefully if a run ignores cancellation.** With `_CANCEL_JOIN_TIMEOUT` monkeypatched to 0 and a thread that never observes the flag, reset returns 503 and leaves every seeded file intact — proving the join budget guards against deleting under a live writer.
 - **Unknown POST → 404.** Route-fallthrough guard.
 - **`GET /` serves the bundled frontend.** Asserts 200 and that the body contains "StemGuessr" — the regression guard for the `web/`-into-package move: if wheel bundling or `DEFAULT_WEB_DIR` resolution regresses, this fails first.
 - **`GET /favicon.svg` serves the icon.** Asserts 200 and an `<svg` body, guarding both the route and the icon's inclusion in the wheel. Complements the browser check that the icon link suppresses the default `/favicon.ico` request.
@@ -43,12 +44,24 @@ Run against a **copy** of `test_cache` (8 tracks, 4 stems) in the session scratc
 | Correct guess ("Heartless", identified via fetched stem URLs) → reveal with cover, "solved on round 2 of 4", full-mix auto-play; score → 1/1 | ✓ |
 | Four skips → miss recorded ("no win — out of guesses"); score → 1/2 | ✓ |
 | Hover panel groups correctly: `stage 2 · 1 → Heartless`, `missed · 1 → Bound 2` | ✓ |
-| Reset **cancel** path: dialog wording correct; dismissing changes nothing (score, view, cache intact) | ✓ |
-| Reset **accept** path: client returns to empty prompt, score zeroed, URL field empty; scratch cache directory verified empty on disk | ✓ |
+| Reset dialog **cancel** path: dialog wording correct; dismissing changes nothing (score, view, cache intact) | ✓ |
+| Reset **accept** path (idle): client returns to empty prompt, score zeroed, URL field empty; scratch cache directory verified empty on disk | ✓ |
 | Enter on reveal advances to next track (reveal hidden, Round 1/4, guess re-enabled) | ✓ |
 | Enter with the *Next track* button focused advances **exactly once** (Track 2→3, not 4) — the `preventDefault` double-fire guard | ✓ |
 | Enter submits guesses (all guesses in the session were submitted via Enter) | ✓ |
 | Favicon: page requests `/favicon.svg` (200), never probes `/favicon.ico`; console fully clean (the former favicon 404 is gone) | ✓ |
+
+### Reset cancels a *live* ingest (browser, via harness)
+
+The reported bug is specifically about reset while an ingest is running. A real Demucs ingest is slow and network-dependent, so this was driven against the **real server** with the ingest pipeline swapped for a cooperative long-running fake (`scratchpad/cancel_harness.py`: monkeypatches `stemguessr.cli.run_ingest_pipeline` to write an in-progress manifest, then loop until `should_cancel`). The `/api/reset` code path — `cancel_and_join` then delete — is exactly the production one.
+
+| Check | Result |
+|-------|--------|
+| Submitting a playlist starts the (fake) ingest; frontend leaves the prompt and shows "Waiting… · ingesting 0/5" with polling active — the state where the old code returned 409 | ✓ |
+| Reset chip → confirm dialog shows the new wording ("cancels any ingest in progress…") | ✓ |
+| Accepting: request returns promptly (not the 60 s timeout), frontend returns to the empty prompt, reset button re-enabled | ✓ |
+| Cache directory verified empty on disk — the fake's manifest was deleted, proving cancel→join→delete completed (a non-cancelled thread would have forced 503 with the cache intact) | ✓ |
+| A subsequent idle `POST /api/reset` still returns 200 (server not wedged) | ✓ |
 
 ## Launcher / uninstaller scripts
 
@@ -61,6 +74,6 @@ One pytest failure during the phase (the hard-coded version assertion, documente
 ## Reproduction
 
 ```bash
-uv run pytest --ignore=tests/test_separate.py -q   # 83 passed
-uv run pytest tests/test_server.py -v              # reset + routing detail
+uv run pytest --ignore=tests/test_separate.py -q   # 87 passed
+uv run pytest tests/test_server.py tests/test_cli.py -v   # reset/cancel + routing detail
 ```
